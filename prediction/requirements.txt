@@ -1,0 +1,7 @@
+influxdb-client
+pandas
+numpy
+matplotlib
+stumpy
+scipy
+scikit-learn

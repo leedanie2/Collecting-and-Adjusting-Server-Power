@@ -1,0 +1,11 @@
+metric,baseline,smoother,pct_change_smoother_vs_baseline
+cost_energy_kJ,33.47,34.01,1.6
+RREI (exceedances/yr),284815.9,287148.3,0.8
+NRS (MW/yr),610803.948,663945.397,8.7
+LOLE proxy (days/yr),17.9236,18.2512,1.8
+CV,0.0436,0.0399,-8.5
+Peak-to-mean,1.0626,1.0558,-0.6
+Freq nadir (Hz),59.2358,59.1557,-0.1
+ROCOF (Hz/s),0.43072,0.47067,9.3
+Voltage sag (events/yr),0.0,0.0,
+Voltage sag depth (pu),,0.04272,

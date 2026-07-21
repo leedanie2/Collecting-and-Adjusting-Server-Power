@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# MATLAB
+slprj/
+*.slxc
+*.asv
+*.autosave
+*.mat
+
+# generated / local
+cluster-profiling/index.html
+.DS_Store
