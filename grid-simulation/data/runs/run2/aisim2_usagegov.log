@@ -1,0 +1,36 @@
+[AI Sim 2] Schedule seed: 3555822270  (rerun with --seed 3555822270 to reproduce)
+[AI Sim 2] 120 s window  |  3 PREFILL bursts  |  128 workers  |  min_seg=5 s
+[AI Sim 2] Schedule (7 phases):
+           t=  0.00 s  REST              24.67 s  →  6 W
+           t= 24.67 s  PREFILL   req=1  7.51 s  →  28 W
+           t= 32.17 s  REST              29.87 s  →  6 W
+           t= 62.04 s  PREFILL   req=2  7.12 s  →  28 W
+           t= 69.16 s  REST              16.16 s  →  6 W
+           t= 85.32 s  PREFILL   req=3  8.75 s  →  28 W
+           t= 94.07 s  REST              25.93 s  →  6 W
+           t=120.00 s  (total)
+
+[13:49:57]  REST      START            t=0.000 s  planned 24.67 s
+[13:50:22]  REST      STOP             t=24.666 s  actual  24.666 s
+
+[13:50:22]  PREFILL   START  (req 1)  t=24.666 s  planned 7.51 s
+[13:50:29]  PREFILL   STOP   (req 1)  t=32.172 s  actual  7.506 s
+
+[13:50:29]  REST      START            t=32.172 s  planned 29.87 s
+[13:50:59]  REST      STOP             t=62.044 s  actual  29.873 s
+
+[13:50:59]  PREFILL   START  (req 2)  t=62.044 s  planned 7.12 s
+[13:51:06]  PREFILL   STOP   (req 2)  t=69.160 s  actual  7.115 s
+
+[13:51:06]  REST      START            t=69.160 s  planned 16.16 s
+[13:51:22]  REST      STOP             t=85.324 s  actual  16.165 s
+
+[13:51:22]  PREFILL   START  (req 3)  t=85.324 s  planned 8.75 s
+[13:51:31]  PREFILL   STOP   (req 3)  t=94.074 s  actual  8.750 s
+
+[13:51:31]  REST      START            t=94.074 s  planned 25.93 s
+[13:51:57]  REST      STOP             t=120.001 s  actual  25.927 s
+
+[13:51:57]  Done.  Total elapsed: 120.021 s  (target 120 s)
+[AI Sim 2] Phase log      → /home/dlee/code/Ramp Down/Power_Smoother_16/ai_benchmark_log_2.csv
+[AI Sim 2] Timeline CSV   → /home/dlee/code/Ramp Down/Power_Smoother_16/ai_benchmark_timeline_2.csv

@@ -35,19 +35,25 @@ The grid simulation runs offline from the power traces under
 
 ## Reproduce the grid-risk results
 
-The published risk and cost numbers regenerate from the checked-in simulation
-outputs with only Python and NumPy — no MATLAB license needed:
+The headline finding — across three repeat collections, di/dt ramp shaping cuts
+the coefficient of variation of fleet PCC power by **69% ± 1%**, while the
+standalone smoother does nothing measurable and the slew governor makes it worse
+— regenerates from checked-in outputs with only Python and NumPy, no MATLAB:
 
 ```bash
 cd grid-simulation
+python3 analysis/summarize_n3.py                           # the n=3 scoreboard
 scripts/score_all.sh                                       # re-score every run
 python3 analysis/compare_pair.py hpl_baseline hpl_rampc --out hpl_rampc
 ```
 
-`compare_pair.py` prints cost and the nine grid-risk metrics as
-baseline / smoother / percent change. Regenerating the simulation outputs
-themselves from the raw traces needs MATLAB R2025a with Simulink and Simscape
-Electrical; see `grid-simulation/README.md`.
+`summarize_n3.py` writes the ranked scoreboard with run-to-run error bars to
+`grid-simulation/data/summary/`; `compare_pair.py` drills into a single pair.
+Of the thirteen metrics the pipeline emits, only four discriminate at fleet
+scale (CV, peak-to-mean, runtime, energy) — the rest are degenerate or
+cold-start-dominated, explained in `grid-simulation/README.md`. Regenerating the
+simulation outputs from the raw traces needs MATLAB R2025a with Simulink and
+Simscape Electrical.
 
 ## Workloads
 
