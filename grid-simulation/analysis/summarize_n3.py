@@ -12,8 +12,10 @@ Inputs, all checked in:
     data/runs/run<N>/<cell>.csv          raw trace: runtime (last t) + energy
     results/<cell>_r<N>_worst/metrics.json   sim: CV, peak-to-mean (post-UPS)
 where cell = {hpl,aisim2,step}_{baseline,powersmoother,rampc,usagegov}, N=1..4.
-ramp.c traces are trimmed to their real-workload plateau inline (trim_auto.py),
-matching what was simulated.
+Runtime and energy use the FULL untrimmed trace: ramp.c's ramp-up/down ballast
+is real wall-time and real energy the mitigation costs (~2x on ramp.c), so
+trimming it would understate the cost. CV/peak come from the sim, already on the
+plateau (there the padding is only an annualisation artifact).
 
 Ranks on four metrics only. CV and peak-to-mean are direct grid quantities;
 runtime and energy are real costs. The other nine the pipeline emits do not
@@ -31,7 +33,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
-from trim_auto import load as trim_load, detect_window, trim  # noqa: E402
+from trim_auto import load as trim_load  # noqa: E402
 
 RUNS = [1, 2, 3, 4]
 WORKLOADS = ["hpl", "aisim2", "step"]
@@ -41,12 +43,14 @@ METRICS = [("CV", "cv_pct"), ("Peak-to-mean", "peak_pct"),
 
 
 def trace_rows(cell, run):
-    """(time, power) rows for a cell; ramp.c trimmed to its plateau like the sim."""
-    rows = trim_load(ROOT / "data" / "runs" / f"run{run}" / f"{cell}.csv")
-    if "rampc" in cell:
-        a, b, _, _ = detect_window(rows)
-        rows = [(t, p) for t, p in trim(rows, a, b)]
-    return rows
+    """Full (untrimmed) (time, power) rows for a cell.
+
+    Used only for the runtime/energy cost. ramp.c is NOT trimmed here: its
+    ramp-up/down ballast is real wall-time and real energy the datacenter spends
+    to run the mitigation (~2x on ramp.c), so trimming it away would understate
+    the cost. CV/peak come from the sim (metrics.json), already on the plateau.
+    """
+    return trim_load(ROOT / "data" / "runs" / f"run{run}" / f"{cell}.csv")
 
 
 def energy_and_dur(rows):
@@ -152,8 +156,9 @@ def write_md(rows, out):
           "collections of the full 3×4 matrix (quiesced server, aisim2 schedule "
           "seed pinned). Negative = mitigation lower (better) for CV/peak/"
           "runtime; energy is a cost either way. CV and peak are on the "
-          "simulated PCC power (post 15 s UPS filter); runtime and energy are "
-          "direct from the RAPL trace.", "",
+          "simulated PCC power (post 15 s UPS filter, plateau only); **runtime "
+          "and energy are the full untrimmed trace** — ramp.c's ramp-up/down "
+          "ballast is real time and energy the mitigation costs.", "",
           "Ranked by CV reduction — the flatness a smoother exists to deliver. "
           "The ± is run-to-run spread; where it rivals the mean (runtime, "
           "energy), a single collection cannot be trusted, which is why three "

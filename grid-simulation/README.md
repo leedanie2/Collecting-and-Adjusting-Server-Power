@@ -21,18 +21,22 @@ number below carries a run-to-run error bar (`data/summary/summary.md`):
 
 | rank | mitigation | CV (flatness) | peak | runtime | energy | verdict |
 |---|---|---|---|---|---|---|
-| 1 | **rampc** | **−68.8 ± 0.9%** | −5.1 ± 0.3% | +6.8 ± 1.0% | +37.6 ± 1.4% | strong smoothing |
+| 1 | **rampc** | **−68.8 ± 0.9%** | −5.1 ± 0.3% | +121 ± 6% | +161 ± 7% | strong smoothing, high cost |
 | 2 | powersmoother | +0.6 ± 1.9% | −0.4% | +3.5 ± 0.2% | +7.4 ± 0.6% | no measurable smoothing |
 | 3 | usagegov | +16.0 ± 4.9% | −0.8 ± 0.2% | +1.1 ± 1.8% | +11.6 ± 0.7% | worsens variability |
 
 Mean ± SD across the four runs. Negative is better for CV/peak/runtime; energy
 is a cost. **di/dt ramp shaping (`rampc`) is the only mitigation that flattens
 the grid-facing load** — it cuts the coefficient of variation of PCC power by
-69%, for a +38% energy and +7% runtime cost. The standalone power smoother does
-nothing measurable at this timescale, and the slew governor makes variability
-worse. The CV bar is tight (±0.9%) even though the raw per-cell runtimes swung
-10–19% between runs — the grid-relevant metric is stable; wall-clock time is the
-noisy one, which is exactly why four collections were taken.
+69%, but at a real cost: **~2.2× wall-time (+121%) and ~2.6× energy (+161%)**,
+because it wraps the workload in ramp-up/down ballast. The standalone power
+smoother does nothing measurable at this timescale, and the slew governor makes
+variability worse. CV is on the trimmed plateau; **runtime and energy are the
+full untrimmed trace**, so the ramp flanks count as the real cost they are (the
+plateau-only figures — +7% runtime, +38% energy — describe only the workload
+once ramped, and understate the mitigation). The CV bar is tight (±0.9%) even
+though raw per-cell runtimes swung 10–19% between runs — the grid metric is
+stable; wall-clock time is the noisy one, which is why four collections were taken.
 
 Regenerate with `python3 analysis/summarize_n3.py` (Python only — the per-run
 metrics are checked in).
