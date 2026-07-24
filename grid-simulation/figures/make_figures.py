@@ -120,35 +120,43 @@ def _series(path):
 
 
 def fig_overlays(run="run1"):
+    """One figure per mitigation (3 workload rows each). ramp.c is shown
+    untrimmed AND time-aligned so its plateau starts where baseline starts —
+    the ramp flanks then sit in negative time / past the baseline end, so the
+    workloads line up for direct shape comparison."""
     rd = ROOT / "data" / "runs" / run
-    fig, axes = plt.subplots(3, 3, figsize=(14, 9), sharex="col")
-    for r, w in enumerate(WORKLOADS):
-        bt, bp = _series(rd / f"{w}_baseline.csv")
-        for c, m in enumerate(MITIG):
-            ax = axes[r][c]
+    for m in MITIG:
+        fig, axes = plt.subplots(3, 1, figsize=(9, 9), sharex=False)
+        for r, w in enumerate(WORKLOADS):
+            ax = axes[r]
+            bt, bp = _series(rd / f"{w}_baseline.csv")
             ax.plot(bt, bp, color=C["baseline"], lw=1.0, alpha=0.85, label="baseline")
             mt, mp = _series(rd / f"{w}_{m}.csv")
-            ax.plot(mt, mp, color=C[m], lw=1.1, label=LABEL[m])
-            if m == "rampc":  # show the full ramp; shade the scored plateau
+            if m == "rampc":
+                # align: shift so the scored-plateau start sits at baseline t=0
                 rows = trim_load(rd / f"{w}_{m}.csv")
                 a, b, _, _ = detect_window(rows)
-                ax.axvspan(a, b, color=C[m], alpha=0.08)
-                ax.axvline(a, color=C[m], ls="--", lw=0.8, alpha=0.6)
-                ax.axvline(b, color=C[m], ls="--", lw=0.8, alpha=0.6)
-                ax.text((a + b) / 2, ax.get_ylim()[1] * 0.98, "scored\nplateau",
-                        ha="center", va="top", fontsize=7, color=C[m])
-            if r == 0:
-                ax.set_title(LABEL[m], fontweight="bold", fontsize=11)
-            if c == 0:
-                ax.set_ylabel(f"{w}\npower (W)", fontweight="bold")
+                mt = [t - a for t in mt]
+                ax.plot(mt, mp, color=C[m], lw=1.1, label=LABEL[m] + " (aligned)")
+                ax.axvspan(0, b - a, color=C[m], alpha=0.07)
+                ax.axvline(0, color=C[m], ls="--", lw=0.8, alpha=0.6)
+                ax.axvline(b - a, color=C[m], ls="--", lw=0.8, alpha=0.6)
+                ax.text((b - a) / 2, ax.get_ylim()[1] * 0.99,
+                        "scored plateau (aligned to baseline)", ha="center",
+                        va="top", fontsize=8, color=C[m])
+                ax.text(-a / 2 if a else -1, ax.get_ylim()[0] * 1.02, "ramp-up",
+                        ha="center", va="bottom", fontsize=7, color=C[m], alpha=0.8)
+            else:
+                ax.plot(mt, mp, color=C[m], lw=1.1, label=LABEL[m])
+            ax.set_ylabel(f"{w}\npower (W)", fontweight="bold")
+            ax.legend(fontsize=9, loc="lower right", framealpha=0.85)
             if r == 2:
                 ax.set_xlabel("time (s)")
-            ax.legend(fontsize=7, loc="lower right", framealpha=0.85)
-    fig.suptitle("Single-node power: baseline vs mitigation "
-                 "(ramp.c shown untrimmed — full di/dt ramp; shaded = scored window)",
-                 fontsize=13, fontweight="bold", y=0.995)
-    fig.tight_layout()
-    fig.savefig(FIG / "overlays.png"); plt.close(fig)
+        note = ("  (untrimmed, plateau aligned to baseline)" if m == "rampc" else "")
+        fig.suptitle(f"Single-node power: baseline vs {LABEL[m]}{note}",
+                     fontsize=13, fontweight="bold", y=0.997)
+        fig.tight_layout()
+        fig.savefig(FIG / f"overlay_{m}.png"); plt.close(fig)
 
 
 # ── Figure 4: pipeline schematic ──────────────────────────────────────────────
