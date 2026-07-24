@@ -6,11 +6,16 @@
 Reads data/summary/{scoreboard,matrix}.csv and data/runs/run1/*.csv (Python +
 matplotlib only, no MATLAB). Outputs:
 
-    scoreboard.png        ranked mitigation effect, 4 metrics, n=4 error bars
+    scoreboard.png        ranked mitigation effect, 4 headline metrics, n=4 error bars
+    all_metrics.png       EVERY metric x 3 mitigations, y-axis inverted (up=better),
+                          trust-tiered; detector slot marked 'not yet scored'
     per_workload.png      CV and energy split by workload (the averages hide a lot)
-    overlays.png          9 baseline-vs-mitigation power traces; ramp.c UNTRIMMED
-                          so the full di/dt ramp shows, trim window shaded
+    overlay_<mitig>.png   baseline-vs-mitigation power traces; ramp.c UNTRIMMED and
+                          plateau-aligned to baseline so the full di/dt ramp shows
     pipeline.png          the trace -> fleet -> UPS -> microgrid -> metrics chain
+
+Reads data/summary/{scoreboard,matrix,full_ranking}.csv and data/runs/run1/*.csv
+(full_ranking.csv is produced by analysis/rank_all.py).
 """
 import csv, statistics, sys
 from pathlib import Path
@@ -183,6 +188,64 @@ def fig_pipeline():
     fig.savefig(FIG / "pipeline.png"); plt.close(fig)
 
 
+def fig_all_metrics():
+    """Every metric x 3 mitigations, % vs baseline, y-axis inverted so the
+    lower-is-better convention reads as up=good. Outliers past the cap are
+    drawn to the edge and labelled. Detector metrics are shown as an explicit
+    'not yet scored' slot rather than omitted."""
+    rows = list(csv.DictReader(open(ROOT / "data/summary/full_ranking.csv")))
+    order = ["direct", "perf", "coldstart", "degenerate", "cliff"]
+    rows.sort(key=lambda r: order.index(r["trust"]))
+    labels = [r["metric"] for r in rows] + ["detector event\nmetrics"]
+    n = len(labels)
+    CAP = 200.0
+    fig, ax = plt.subplots(figsize=(15, 6.5))
+    width = 0.26
+    for i, m in enumerate(MITIG):
+        xs = [j + (i - 1) * width for j in range(len(rows))]
+        vals, errs, over = [], [], []
+        for r in rows:
+            v = r[f"{m}_pct"]
+            v = float(v) if v != "" else 0.0
+            sd = r[f"{m}_sd"]; sd = float(sd) if sd != "" else 0.0
+            over.append(abs(v) > CAP)
+            vals.append(max(-CAP, min(CAP, v)))
+            errs.append(0 if abs(v) > CAP else sd)
+        ax.bar(xs, vals, width, yerr=errs, capsize=2.5, label=LABEL[m],
+               color=C[m], edgecolor="black", linewidth=0.4)
+        for x, v, o, r in zip(xs, vals, over, rows):
+            if o:
+                true = float(r[f"{m}_pct"])
+                ax.annotate(f"{true:+.0f}%", (x, v), ha="center",
+                            va="top" if v > 0 else "bottom", fontsize=7,
+                            color=C[m], fontweight="bold")
+    # detector slot: grey hatch, no data
+    dx = len(rows)
+    ax.axvspan(dx - 0.5, dx + 0.5, color="#bbbbbb", alpha=0.25)
+    ax.text(dx, 0, "not yet\nscored", ha="center", va="center",
+            fontsize=9, color="#555", style="italic")
+    # trust-tier shading + labels
+    tiers = {}
+    for j, r in enumerate(rows):
+        tiers.setdefault(r["trust"], [j, j])[1] = j
+    band = {"direct": "#e8f4ea", "perf": "#e8eef7", "coldstart": "#fdf2e2",
+            "degenerate": "#f2eaea", "cliff": "#f0e6f0"}
+    for t, (lo, hi) in tiers.items():
+        ax.axvspan(lo - 0.5, hi + 0.5, color=band[t], alpha=0.5, zorder=0)
+        ax.text((lo + hi) / 2, -CAP * 0.96, t, ha="center", fontsize=9,
+                color="#333", fontweight="bold")
+    ax.axhline(0, color="black", lw=1)
+    ax.set_xticks(range(n)); ax.set_xticklabels(labels, rotation=35, ha="right", fontsize=9)
+    ax.set_ylim(-CAP, CAP); ax.invert_yaxis()          # negative (better) points UP
+    ax.set_ylabel("% change vs baseline\n(↑ better · ↓ worse)")
+    ax.legend(loc="lower left", fontsize=10, framealpha=0.95)
+    ax.set_title("Every metric, all three mitigations  (n=4, mean ± SD · y-axis "
+                 "inverted so up = better · |value|>200% clipped and labelled)",
+                 fontsize=13, fontweight="bold")
+    fig.tight_layout()
+    fig.savefig(FIG / "all_metrics.png"); plt.close(fig)
+
+
 if __name__ == "__main__":
     FIG.mkdir(exist_ok=True)
     sb, mat = read_scoreboard(), read_matrix()
@@ -190,4 +253,5 @@ if __name__ == "__main__":
     fig_per_workload(mat)
     fig_overlays()
     fig_pipeline()
+    fig_all_metrics()
     print("wrote:", ", ".join(p.name for p in sorted(FIG.glob("*.png"))))
