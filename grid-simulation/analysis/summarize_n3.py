@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""The headline scoreboard: which mitigation wins, with n=3 error bars.
+"""The headline scoreboard: which mitigation wins, with n=4 error bars.
 
-The 3x4 matrix was collected three times on a quiesced server (aisim2 schedule
+The 3x4 matrix was collected four times on a quiesced server (aisim2 schedule
 seed pinned across all runs, so the repeats isolate system variance, not
 workload luck). This aggregates them into one ranked table with a run-to-run
 standard deviation on every number -- so a real effect is distinguishable from a
@@ -11,7 +11,7 @@ grid-relevant CV did not, which is the whole reason the repeats were collected.
 Inputs, all checked in:
     data/runs/run<N>/<cell>.csv          raw trace: runtime (last t) + energy
     results/<cell>_r<N>_worst/metrics.json   sim: CV, peak-to-mean (post-UPS)
-where cell = {hpl,aisim2,step}_{baseline,powersmoother,rampc,usagegov}, N=1..3.
+where cell = {hpl,aisim2,step}_{baseline,powersmoother,rampc,usagegov}, N=1..4.
 ramp.c traces are trimmed to their real-workload plateau inline (trim_auto.py),
 matching what was simulated.
 
@@ -33,7 +33,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
 from trim_auto import load as trim_load, detect_window, trim  # noqa: E402
 
-RUNS = [1, 2, 3]
+RUNS = [1, 2, 3, 4]
 WORKLOADS = ["hpl", "aisim2", "step"]
 SMOOTHERS = ["powersmoother", "rampc", "usagegov"]
 METRICS = [("CV", "cv_pct"), ("Peak-to-mean", "peak_pct"),
@@ -91,7 +91,7 @@ def mean_sd(xs):
 
 def score(pairs):
     """Per smoother: mean each metric across the 3 workloads within a run, then
-    mean +/- SD across the 3 runs. The SD is the run-to-run error bar."""
+    mean +/- SD across the 4 runs. The SD is the run-to-run error bar."""
     rows = []
     for s in SMOOTHERS:
         row = {"smoother": s}
@@ -141,14 +141,14 @@ def write_csv(rows, out):
 
 
 def write_md(rows, out):
-    L = ["# Which mitigation wins? (n=3, mean ± SD across runs)", "",
+    L = ["# Which mitigation wins? (n=4, mean ± SD across runs)", "",
          "| rank | mitigation | CV | peak | runtime | energy | verdict |",
          "|---|---|---|---|---|---|---|"]
     for r in rows:
         L.append(f"| {r['rank']} | **{r['smoother']}** | {fmt(r,'cv_pct')} | "
                  f"{fmt(r,'peak_pct')} | {fmt(r,'runtime_pct')} | "
                  f"{fmt(r,'energy_pct')} | {verdict(r['cv_pct'], r.get('cv_pct_sd'))} |")
-    L += ["", "Each cell: mean ± standard deviation across three repeat "
+    L += ["", "Each cell: mean ± standard deviation across four repeat "
           "collections of the full 3×4 matrix (quiesced server, aisim2 schedule "
           "seed pinned). Negative = mitigation lower (better) for CV/peak/"
           "runtime; energy is a cost either way. CV and peak are on the "

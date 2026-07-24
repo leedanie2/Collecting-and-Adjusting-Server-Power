@@ -26,3 +26,12 @@ run,workload,mitigation,cv_pct,peak_pct,runtime_pct,energy_pct
 3,step,powersmoother,-1.63,-0.53,0.02,4.77
 3,step,rampc,-66.9,-5.67,2.41,28.93
 3,step,usagegov,-2.56,-0.5,-0.01,2.59
+4,aisim2,powersmoother,3.0,-0.14,-0.05,4.02
+4,aisim2,rampc,-63.25,-6.63,11.18,65.59
+4,aisim2,usagegov,58.75,-1.51,-0.03,28.97
+4,hpl,powersmoother,2.19,-0.63,10.12,14.33
+4,hpl,rampc,-77.24,-3.22,11.93,24.31
+4,hpl,usagegov,-10.94,-0.67,0.43,2.57
+4,step,powersmoother,-4.91,-0.42,0.04,3.29
+4,step,rampc,-66.12,-5.7,-0.97,24.75
+4,step,usagegov,-2.34,-0.5,0.01,2.52

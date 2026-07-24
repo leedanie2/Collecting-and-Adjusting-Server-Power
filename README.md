@@ -35,14 +35,14 @@ The grid simulation runs offline from the power traces under
 
 ## Reproduce the grid-risk results
 
-The headline finding — across three repeat collections, di/dt ramp shaping cuts
+The headline finding — across four repeat collections, di/dt ramp shaping cuts
 the coefficient of variation of fleet PCC power by **69% ± 1%**, while the
 standalone smoother does nothing measurable and the slew governor makes it worse
 — regenerates from checked-in outputs with only Python and NumPy, no MATLAB:
 
 ```bash
 cd grid-simulation
-python3 analysis/summarize_n3.py                           # the n=3 scoreboard
+python3 analysis/summarize_n3.py                           # the n=4 scoreboard
 scripts/score_all.sh                                       # re-score every run
 python3 analysis/compare_pair.py hpl_baseline hpl_rampc --out hpl_rampc
 ```
