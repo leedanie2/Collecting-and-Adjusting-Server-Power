@@ -21,6 +21,11 @@
 | under-freq events | degenerate | +80.8±5.8 | +13.2±3.8 | **-0.5±6.5** | usagegov |
 | _cliff_ | |  |  |  | |
 | volt sag events | cliff | **-100.0** | +1670.9±2504.4 | -100.0 | rampc |
+| _detector_ | |  |  |  | |
+| event recall | detector | _pending_ | _pending_ | _pending_ | _pending_ |
+| event latency (s) | detector | _pending_ | _pending_ | _pending_ | _pending_ |
+| lead time (s) | detector | _pending_ | _pending_ | _pending_ | _pending_ |
+| alert precision | detector | _pending_ | _pending_ | _pending_ | _pending_ |
 
 ### Trust tags
 
@@ -29,6 +34,7 @@
 - **coldstart** — dominated by the model's t=0 cold start; needs WARMUP_S=45 to mean anything
 - **degenerate** — no signal — one t=0 exceedance per run makes it ~constant
 - **cliff** — count across a threshold both sides sit ~equal distance from
+- **detector** — detection quality of usage_edge / RF — NOT YET SCORED (needs a mycroft eval run with /proc/stat + onset labels; see RESULTS.md)
 
 The headline `scoreboard.csv` ranks on the four `direct`/`perf` rows only. The `coldstart` rows become meaningful with `WARMUP_S=45 scripts/score_all.sh`; `degenerate`/`cliff` rows carry no mitigation signal at worst-case aggregation.
 

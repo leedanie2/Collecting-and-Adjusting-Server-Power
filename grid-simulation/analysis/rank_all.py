@@ -6,7 +6,7 @@ ranks every metric the pipeline emits, per mitigation, mean +/- SD across the 4
 runs, with the winner marked and a trust tag so the reader knows which rankings
 mean something. Nothing is hidden -- but the tag says which to believe.
 
-    python3 analysis/rank_all.py           # -> data/summary/full_ranking.{csv,md}
+    python3 analysis/rank_all.py           # -> data/clean/summary/full_ranking.{csv,md}
     python3 analysis/rank_all.py --selfcheck
 
 Cost (runtime, energy) is the full untrimmed trace; everything else is the
@@ -38,14 +38,20 @@ METRICS = [
     ("under-freq events",  ("frequency", "under_freq_events_per_year"), "degenerate"),
     ("volt sag events",    ("voltage", "voltage_sag_events_per_yr"), "cliff"),
 ]
-TRUST_ORDER = ["direct", "perf", "coldstart", "degenerate", "cliff"]
+TRUST_ORDER = ["direct", "perf", "coldstart", "degenerate", "cliff", "detector"]
 TRUST_NOTE = {
     "direct": "computed straight from the signal — believe the ranking",
     "perf": "real cost (full trace)",
     "coldstart": "dominated by the model's t=0 cold start; needs WARMUP_S=45 to mean anything",
     "degenerate": "no signal — one t=0 exceedance per run makes it ~constant",
     "cliff": "count across a threshold both sides sit ~equal distance from",
+    "detector": "detection quality of usage_edge / RF — NOT YET SCORED "
+                "(needs a mycroft eval run with /proc/stat + onset labels; see RESULTS.md)",
 }
+# Named so the gap is explicit, not a silent omission. Filled by a detector
+# eval run (usage_edge.py / RF evaluator.py), which the power traces can't supply.
+DETECTOR_METRICS = ["event recall", "event latency (s)", "lead time (s)",
+                    "alert precision"]
 
 
 def energy_and_dur(csv_path):
@@ -97,6 +103,9 @@ def rank():
         cand = [(v[0], s) for s, v in per_mitig.items() if v[0] is not None]
         winner = min(cand)[1] if cand else None
         out.append((label, trust, per_mitig, winner))
+    # detector rows: named but unscored, so the scoreboard shows the gap
+    for label in DETECTOR_METRICS:
+        out.append((label, "detector", {m: (None, None) for m in MITIG}, None))
     out.sort(key=lambda r: TRUST_ORDER.index(r[1]))
     return out
 
@@ -112,8 +121,10 @@ def write_csv(rows, out):
         w.writerow(["metric", "trust", "winner"]
                    + [f"{m}_pct" for m in MITIG] + [f"{m}_sd" for m in MITIG])
         for label, trust, pm, winner in rows:
-            w.writerow([label, trust, winner or ""]
-                       + ["" if pm[m][0] is None else round(pm[m][0], 1) for m in MITIG]
+            win = "pending" if trust == "detector" else (winner or "")
+            w.writerow([label, trust, win]
+                       + ["pending" if trust == "detector" else
+                          ("" if pm[m][0] is None else round(pm[m][0], 1)) for m in MITIG]
                        + ["" if pm[m][1] is None else round(pm[m][1], 1) for m in MITIG])
 
 
@@ -132,10 +143,13 @@ def write_md(rows, out):
             last = trust
         cells = []
         for m in MITIG:
-            s = fmt(pm[m])
-            cells.append(f"**{s}**" if m == winner and pm[m][0] is not None else s)
-        L.append(f"| {label} | {trust} | " + " | ".join(cells)
-                 + f" | {winner or '—'} |")
+            if trust == "detector":
+                cells.append("_pending_")
+            else:
+                s = fmt(pm[m])
+                cells.append(f"**{s}**" if m == winner and pm[m][0] is not None else s)
+        win = "_pending_" if trust == "detector" else (winner or "—")
+        L.append(f"| {label} | {trust} | " + " | ".join(cells) + f" | {win} |")
     L += ["", "### Trust tags", ""]
     for t in TRUST_ORDER:
         L.append(f"- **{t}** — {TRUST_NOTE[t]}")

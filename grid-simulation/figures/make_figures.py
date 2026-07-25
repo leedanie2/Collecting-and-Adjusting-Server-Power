@@ -193,13 +193,15 @@ def fig_all_metrics():
     lower-is-better convention reads as up=good. Outliers past the cap are
     drawn to the edge and labelled. Detector metrics are shown as an explicit
     'not yet scored' slot rather than omitted."""
-    rows = list(csv.DictReader(open(ROOT / "data/summary/full_ranking.csv")))
+    allrows = list(csv.DictReader(open(ROOT / "data/summary/full_ranking.csv")))
     order = ["direct", "perf", "coldstart", "degenerate", "cliff"]
+    rows = [r for r in allrows if r["trust"] in order]          # scored grid+cost
+    det = [r for r in allrows if r["trust"] == "detector"]      # named but pending
     rows.sort(key=lambda r: order.index(r["trust"]))
-    labels = [r["metric"] for r in rows] + ["detector event\nmetrics"]
+    labels = [r["metric"] for r in rows] + [f"{r['metric']}\n(detector)" for r in det]
     n = len(labels)
     CAP = 200.0
-    fig, ax = plt.subplots(figsize=(15, 6.5))
+    fig, ax = plt.subplots(figsize=(17, 6.5))
     width = 0.26
     for i, m in enumerate(MITIG):
         xs = [j + (i - 1) * width for j in range(len(rows))]
@@ -219,11 +221,15 @@ def fig_all_metrics():
                 ax.annotate(f"{true:+.0f}%", (x, v), ha="center",
                             va="top" if v > 0 else "bottom", fontsize=7,
                             color=C[m], fontweight="bold")
-    # detector slot: grey hatch, no data
-    dx = len(rows)
-    ax.axvspan(dx - 0.5, dx + 0.5, color="#bbbbbb", alpha=0.25)
-    ax.text(dx, 0, "not yet\nscored", ha="center", va="center",
-            fontsize=9, color="#555", style="italic")
+    # detector tier: named metrics, greyed, marked pending (need a mycroft eval)
+    if det:
+        lo, hi = len(rows), len(rows) + len(det) - 1
+        ax.axvspan(lo - 0.5, hi + 0.5, color="#bbbbbb", alpha=0.30, zorder=0)
+        ax.text((lo + hi) / 2, 0, "PENDING\n(needs detector\neval run)",
+                ha="center", va="center", fontsize=9, color="#555",
+                style="italic", fontweight="bold")
+        ax.text((lo + hi) / 2, -CAP * 0.96, "detector", ha="center",
+                fontsize=9, color="#333", fontweight="bold")
     # trust-tier shading + labels
     tiers = {}
     for j, r in enumerate(rows):
@@ -236,6 +242,7 @@ def fig_all_metrics():
                 color="#333", fontweight="bold")
     ax.axhline(0, color="black", lw=1)
     ax.set_xticks(range(n)); ax.set_xticklabels(labels, rotation=35, ha="right", fontsize=9)
+    ax.set_xlim(-0.5, n - 0.5)                          # include the detector tier
     ax.set_ylim(-CAP, CAP); ax.invert_yaxis()          # negative (better) points UP
     ax.set_ylabel("% change vs baseline\n(↑ better · ↓ worse)")
     ax.legend(loc="lower left", fontsize=10, framealpha=0.95)
@@ -246,6 +253,107 @@ def fig_all_metrics():
     fig.savefig(FIG / "all_metrics.png"); plt.close(fig)
 
 
+SUMMARY = ROOT / "data" / "summary"
+RUNS_DIR = ROOT / "data" / "runs"
+RESULTS = ROOT / "results"
+
+
+# ── Figure: run-to-run reproducibility (each of the 4 runs as a dot) ───────────
+def fig_reproducibility():
+    """Each dot is one collection's mean-over-workloads; the bar is mean ± SD.
+    Shows CV is tight (robust) while runtime/energy carry the spread."""
+    rows = list(csv.DictReader(open(SUMMARY / "matrix.csv")))
+    metrics = [("cv_pct", "CV (flatness)"), ("runtime_pct", "runtime"),
+               ("energy_pct", "energy")]
+    fig, axes = plt.subplots(1, 3, figsize=(13, 4.5))
+    for ax, (col, title) in zip(axes, metrics):
+        for i, m in enumerate(MITIG):
+            byrun = {}
+            for r in rows:
+                if (r.get("smoother") or r["mitigation"]) == m:
+                    byrun.setdefault(r["run"], []).append(float(r[col]))
+            vals = [statistics.mean(byrun[k]) for k in sorted(byrun)]
+            xs = [i + (j - (len(vals) - 1) / 2) * 0.07 for j in range(len(vals))]
+            ax.scatter(xs, vals, color=C[m], s=48, zorder=3,
+                       edgecolor="black", linewidth=0.4)
+            mean, sd = statistics.mean(vals), statistics.pstdev(vals)
+            ax.errorbar(i, mean, yerr=sd, fmt="_", color="black",
+                        capsize=7, markersize=22, elinewidth=1.4, zorder=2)
+        ax.axhline(0, color="black", lw=0.8)
+        ax.set_xticks(range(len(MITIG)))
+        ax.set_xticklabels(["ramp.c", "smoother", "gov"], rotation=20, ha="right")
+        ax.set_title(title, fontweight="bold"); ax.set_ylabel("% vs baseline")
+    fig.suptitle("Run-to-run reproducibility (n=4): each dot is one collection · "
+                 "CV is tight, cost is the noisy dimension",
+                 fontsize=13, fontweight="bold", y=1.02)
+    fig.tight_layout(); fig.savefig(FIG / "reproducibility.png"); plt.close(fig)
+
+
+# ── Figure: power distribution flattens under ramp.c ──────────────────────────
+def fig_distribution(run="run1"):
+    """Histogram of single-node power: baseline (spread) vs ramp.c plateau
+    (tight). The visual behind the CV-reduction number."""
+    fig, axes = plt.subplots(1, 3, figsize=(13, 4.2))
+    for ax, w in zip(axes, WORKLOADS):
+        bp = [p for _, p in trim_load(RUNS_DIR / run / f"{w}_baseline.csv")]
+        rr = trim_load(RUNS_DIR / run / f"{w}_rampc.csv")
+        a, b, _, _ = detect_window(rr)
+        rp = [p for t, p in rr if a <= t <= b]        # plateau only
+        ax.hist(bp, bins=45, color=C["baseline"], alpha=0.6, density=True,
+                label="baseline")
+        ax.hist(rp, bins=45, color=C["rampc"], alpha=0.6, density=True,
+                label="ramp.c (plateau)")
+        ax.set_title(w, fontweight="bold")
+        ax.set_xlabel("single-node power (W)")
+        if w == WORKLOADS[0]:
+            ax.set_ylabel("density"); ax.legend(fontsize=9)
+    fig.suptitle("Power distribution flattens under ramp.c — baseline is spread, "
+                 "ramp.c is a tight peak (run1)",
+                 fontsize=13, fontweight="bold", y=1.0)
+    fig.tight_layout(); fig.savefig(FIG / "distribution.png"); plt.close(fig)
+
+
+# ── Figure: cost vs benefit scatter (the one-glance summary) ──────────────────
+def fig_tradeoff(sb):
+    fig, ax = plt.subplots(figsize=(7.5, 6))
+    for m in MITIG:
+        x, xe = float(sb[m]["energy_pct"]), float(sb[m]["energy_pct_sd"])
+        y, ye = -float(sb[m]["cv_pct"]), float(sb[m]["cv_pct_sd"])   # benefit
+        ax.errorbar(x, y, xerr=xe, yerr=ye, fmt="o", color=C[m], ms=13,
+                    capsize=4, mec="black", zorder=3)
+        ax.annotate(LABEL[m], (x, y), textcoords="offset points",
+                    xytext=(10, 8), fontsize=10, fontweight="bold")
+    ax.axhline(0, color="grey", lw=0.9, ls="--")
+    ax.axvline(0, color="grey", lw=0.9)
+    ax.set_xlabel("energy cost  (% vs baseline)  →  more expensive")
+    ax.set_ylabel("flatness benefit  (% CV reduction)  →  better")
+    ax.set_title("Cost vs benefit: only ramp.c buys flatness — and it pays for it",
+                 fontweight="bold", fontsize=12)
+    fig.tight_layout(); fig.savefig(FIG / "tradeoff.png"); plt.close(fig)
+
+
+# ── Figure: fleet PCC power (post-UPS) — what the grid actually sees ───────────
+def fig_pcc(run="1"):
+    fig, axes = plt.subplots(3, 1, figsize=(11, 8))
+    for ax, w in zip(axes, WORKLOADS):
+        for cell, color, lab in [("baseline", C["baseline"], "baseline"),
+                                 ("rampc", C["rampc"], "ramp.c")]:
+            p = RESULTS / f"{w}_{cell}_r{run}_worst" / "S_PCC.csv"
+            if not p.exists():
+                continue
+            rows = [(float(r[0]), float(r[1])) for r in csv.reader(open(p)) if len(r) >= 2]
+            ax.plot([t for t, _ in rows], [v / 1e6 for _, v in rows],
+                    color=color, lw=1.0, label=lab)
+        ax.set_ylabel(f"{w}\nPCC power (MW)", fontweight="bold")
+        ax.legend(fontsize=9, loc="upper right", framealpha=0.85)
+    axes[-1].set_xlabel("time (s)")
+    fig.suptitle("Fleet PCC power (10,000 servers, post-15 s-UPS): the grid-facing "
+                 "signal — ramp.c flattens the ripple",
+                 fontsize=13, fontweight="bold", y=0.998)
+    fig.tight_layout(); fig.savefig(FIG / "pcc_timeseries.png"); plt.close(fig)
+
+
+
 if __name__ == "__main__":
     FIG.mkdir(exist_ok=True)
     sb, mat = read_scoreboard(), read_matrix()
@@ -254,4 +362,8 @@ if __name__ == "__main__":
     fig_overlays()
     fig_pipeline()
     fig_all_metrics()
+    fig_reproducibility()
+    fig_distribution()
+    fig_tradeoff(sb)
+    fig_pcc()
     print("wrote:", ", ".join(p.name for p in sorted(FIG.glob("*.png"))))
