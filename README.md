@@ -88,8 +88,6 @@ described, because the final design is mostly a consequence of them.
 
 ## Not included
 
-- **`composite_ramp.c`**, described in the paper — a collaborator's, and to be
-  added. See `mitigation/composite-ramp/`.
 - **Telemetry caches** (~216 MB) and dated training pickles. The exported model
   of record is committed; `prediction/telemetry/` regenerates the caches from
   InfluxDB.

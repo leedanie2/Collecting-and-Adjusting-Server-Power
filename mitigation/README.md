@@ -23,8 +23,13 @@ usage edge, and the core-list parser without root or a workload.
 
 ## composite-ramp/
 
-`composite_ramp.c` extends `ramp.c` with per-core filling and transition
-handling. Its source is not in this repository yet — see the README there.
+`composite_ramp.c` generalises `ramp.c` from one workload to a sequence of them,
+shaping the transitions between consecutive jobs as well as the ends. Workers
+pinned at `SCHED_IDLE` fill each workload's internal dips, and a core leaving
+the active set is paired against one joining it so the swap cancels — only the
+unpaired remainder is ramped. It is not part of the measured matrix: every
+`rampc` cell runs a single workload, where it and `ramp.c` do the same thing.
+See the README there.
 
 ## power-smoother/
 
