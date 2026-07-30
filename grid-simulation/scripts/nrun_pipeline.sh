@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # nrun_pipeline.sh — turn the 4 repeat runs into the n=4 scoreboard with error bars.
 #
-# Assumes data/clean/runs/run{1,2,3,4}/ hold the raw recollect.sh traces (15 cells
+# Assumes data/runs/run{1,2,3,4}/ hold the raw recollect.sh traces (15 cells
 # each). Stages them (trims rampc to its plateau, copies the rest) under unique
 # per-run basenames, simulates all 60 in ONE MATLAB session (model loaded once),
 # scores each, and aggregates.
@@ -14,7 +14,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MATLAB="${MATLAB:-/usr/local/MATLAB/R2025a/bin/matlab}"
 cd "$ROOT"
 
-RUNS_DIR=data/clean/runs
+RUNS_DIR=data/runs
 STAGED="$RUNS_DIR/staged"
 CELLS=$(for w in hpl aisim2 step; do for c in baseline powersmoother rampc usagegov; do echo "${w}_${c}"; done; done)
 

@@ -22,10 +22,10 @@
 | _cliff_ | |  |  |  | |
 | volt sag events | cliff | **-100.0** | +1670.9±2504.4 | -100.0 | rampc |
 | _detector_ | |  |  |  | |
-| event recall | detector | _pending_ | _pending_ | _pending_ | _pending_ |
-| event latency (s) | detector | _pending_ | _pending_ | _pending_ | _pending_ |
-| lead time (s) | detector | _pending_ | _pending_ | _pending_ | _pending_ |
-| alert precision | detector | _pending_ | _pending_ | _pending_ | _pending_ |
+| event recall | detector | _n/a_ | _n/a_ | 0.33 | _n/a_ |
+| event latency (s) | detector | _n/a_ | _n/a_ | 0.23 | _n/a_ |
+| lead time (s) | detector | _n/a_ | _n/a_ | -0.23 | _n/a_ |
+| alert precision | detector | _n/a_ | _n/a_ | 0.19 | _n/a_ |
 
 ### Trust tags
 
@@ -34,7 +34,7 @@
 - **coldstart** — dominated by the model's t=0 cold start; needs WARMUP_S=45 to mean anything
 - **degenerate** — no signal — one t=0 exceedance per run makes it ~constant
 - **cliff** — count across a threshold both sides sit ~equal distance from
-- **detector** — detection quality of usage_edge / RF — NOT YET SCORED (needs a mycroft eval run with /proc/stat + onset labels; see RESULTS.md)
+- **detector** — ABSOLUTE values, not % vs baseline, and only usagegov has a detector — see analysis/score_detector.py. aisim2 only: hpl and step emit no phase log to score against
 
 The headline `scoreboard.csv` ranks on the four `direct`/`perf` rows only. The `coldstart` rows become meaningful with `WARMUP_S=45 scripts/score_all.sh`; `degenerate`/`cliff` rows carry no mitigation signal at worst-case aggregation.
 

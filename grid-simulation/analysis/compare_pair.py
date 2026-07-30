@@ -17,14 +17,30 @@ Usage:
     python3 analysis/compare_pair.py aiload_baseline aiload_gov
     python3 analysis/compare_pair.py <base> <smoother> --suffix _worst
 
-Run from the grid/ root. Reads traces from data/traces/, writes
-data/comparisons/<prefix>_comparison.csv (prefix = shared prefix of the two
-run names, e.g. aisim2), so workloads don't clobber each other.
+Run from the grid/ root. Reads traces from data/<set>/traces/, writes
+data/<set>/comparisons/<prefix>_comparison.csv (set = original | clean,
+prefix = shared prefix of the two run names, e.g. aisim2clean_rampc).
 """
 import os, sys, csv, json, argparse
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+
+
+def find_trace(name):
+    """traces live under data/<set>/traces/, set = original | clean (see data/README.md).
+    Accept a bare filename and search one level down; an explicit relative path
+    still wins."""
+    base = ROOT / "data"
+    direct = base / name
+    if direct.is_file():
+        return direct
+    # data/<set>/traces/[raw/]<name>, set = original | clean
+    hits = (sorted(base.glob(f"*/traces/{name}"))
+            + sorted(base.glob(f"*/traces/*/{name}")))
+    if not hits:
+        raise SystemExit(f"trace not found under data/*/traces/: {name}")
+    return hits[0]
 
 # 9 risk stats: (label, metrics.json section, key). ratio = smoother / baseline;
 # for all of these lower = safer, so ratio < 1 means the smoother helped.
@@ -54,6 +70,27 @@ def energy_j(csv_path):
     return sum((w[i] + w[i + 1]) / 2 * (t[i + 1] - t[i]) for i in range(len(t) - 1)), t[-1] - t[0]
 
 
+def gflops_for(run):
+    """Sustained Gflops for a run, from data/sweep_meta.csv if present.
+
+    Not captured for the clean set -- recollect.sh sends the workload's stdout
+    (where HPL prints its score) to the terminal rather than a file, so there is
+    no Gflops row for those runs. Returns None and the caller degrades.
+    """
+    p = ROOT / "data" / "sweep_meta.csv"
+    if not p.exists():
+        return None
+    base = run[:-len("_worst")] if run.endswith("_worst") else run
+    with open(p) as fh:
+        for r in csv.DictReader(fh):
+            if r.get("run_name") in (run, base):
+                try:
+                    return float(r["gflops"])
+                except (TypeError, ValueError, KeyError):
+                    return None
+    return None
+
+
 def load_metrics(run):
     p = ROOT / "results" / run / "metrics.json"
     if not p.exists():
@@ -79,13 +116,49 @@ def main():
     args = ap.parse_args()
 
     # ── COST: Riemann-sum ratio of the raw CSVs ────────────────────────────────
-    eb, db = energy_j(ROOT / "data" / "traces" / f"{args.baseline}.csv")
-    es, ds = energy_j(ROOT / "data" / "traces" / f"{args.smoother}.csv")
+    eb, db = energy_j(find_trace(f"{args.baseline}.csv"))
+    es, ds = energy_j(find_trace(f"{args.smoother}.csv"))
     cost_ratio = es / eb
     print("COST  (energy area, integral P dt over raw single-node trace)")
     print(f"  {'baseline':<24}{eb/1000:10.2f} kJ   ({db:.1f} s)")
     print(f"  {'smoother':<24}{es/1000:10.2f} kJ   ({ds:.1f} s)")
     print(f"  {'ratio smoother/baseline':<24}{cost_ratio:10.3f}   = {(cost_ratio-1)*100:+.1f}% energy-area")
+
+    # ── PERFORMANCE: what the smoother costs in time, not just watts ──────────
+    # runtime_s is the trace duration. It is a real time-to-completion number
+    # ONLY for hpl, which is fixed-WORK: HPL solves N=80000 and takes as long as
+    # it takes, so a longer trace means the same work ran slower.
+    #
+    # It is NOT one for aisim2 or step. Both are fixed-TIME: ai_sim_2 runs a
+    # ~120 s REST/PREFILL schedule and ./load plays a fixed waveform, so runtime
+    # is pinned by construction (~0% here) and any real cost shows up as less
+    # work done inside the window -- which nothing currently measures.
+    #
+    # And for any rampc cell runtime_s is the TRIMMED PLATEAU width, not a
+    # workload duration, so it is not comparable to its baseline at all.
+    # Read this column for hpl_powersmoother and hpl_slewgov; treat the rest
+    # as descriptive.
+    runtime_pct = (ds / db - 1.0) * 100.0
+    print("\nPERFORMANCE  (runtime = trace duration; a true time-to-completion "
+          "only for fixed-work hpl -- see compare_pair.py)")
+    print(f"  {'baseline runtime':<24}{db:10.1f} s")
+    print(f"  {'smoother runtime':<24}{ds:10.1f} s")
+    print(f"  {'change':<24}{runtime_pct:+10.1f} %")
+    gb, gs = gflops_for(args.baseline), gflops_for(args.smoother)
+    perf_rows = [("runtime_s", round(db, 1), round(ds, 1), round(runtime_pct, 1))]
+    if gb and gs:
+        gpct = (gs / gb - 1.0) * 100.0
+        # Gflops/W uses mean power over the run = energy / duration.
+        gwb, gws = gb / (eb / db), gs / (es / ds)
+        print(f"  {'baseline Gflops':<24}{gb:10.1f}")
+        print(f"  {'smoother Gflops':<24}{gs:10.1f}   ({gpct:+.1f}%)")
+        print(f"  {'Gflops/W':<24}{gwb:10.3f} -> {gws:.3f}   ({(gws/gwb-1)*100:+.1f}%)")
+        perf_rows += [("gflops", gb, gs, round(gpct, 1)),
+                      ("gflops_per_W", round(gwb, 4), round(gws, 4),
+                       round((gws / gwb - 1) * 100, 1))]
+    else:
+        print("  Gflops                   n/a  (not captured during collection; "
+              "see data/sweep_meta.csv)")
 
     # ── RISK: 9 grid metrics, baseline / smoother / ratio ──────────────────────
     mb = load_metrics(args.baseline + args.suffix)
@@ -106,6 +179,8 @@ def main():
 
     # ── CSV ─────────────────────────────────────────────────────────────────────
     prefix = args.out or os.path.commonprefix([args.baseline, args.smoother]).rstrip("_") or "pair"
+    # Mirror the traces split so clean-set results never mix with the original
+    # contaminated set in the same directory listing.
     outdir = ROOT / "data" / "comparisons"
     outdir.mkdir(parents=True, exist_ok=True)
     out = outdir / f"{prefix}_comparison.csv"
@@ -114,6 +189,8 @@ def main():
         w.writerow(["metric", "baseline", "smoother", "pct_change_smoother_vs_baseline"])
         w.writerow(["cost_energy_kJ", round(eb / 1000, 2), round(es / 1000, 2),
                     round((cost_ratio - 1) * 100, 1)])
+        for name, b_, s_, p_ in perf_rows:
+            w.writerow([name, b_, s_, p_])
         for label, b, s, pct in rows:
             w.writerow([label, b, s, round(pct, 1) if pct == pct else ""])
     print(f"\nwrote {out}")

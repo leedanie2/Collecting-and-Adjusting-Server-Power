@@ -92,7 +92,34 @@ def annualize(x_per_trace, trace_duration_s):
     return x_per_trace * SECONDS_PER_YEAR / trace_duration_s
 
 
-def compute_risk_metrics(P_W, t_s):
+# The model starts all N_servers instantaneously at the trace's first power
+# value, so t=0 is a fleet-wide cold start that is a property of the initial
+# condition, not the workload. It dominates every ramp metric: each worst-case
+# run has exactly ONE exceedance (that step), which is why RREI reduces to
+# SECONDS_PER_YEAR/duration and carries no efficacy signal. It also penalises
+# any trace that legitimately begins at high power -- trimmed ramp.c traces
+# start at their plateau (~420 W vs a baseline's ~194 W), so their cold-start
+# step is ~2x and ROCOF/NRS read as a ~2x "regression" that is pure artifact
+# (the ROCOF ratio tracks the first-sample ratio to within a few percent).
+#
+# Discarding a short warm-up removes the initial condition from the ramp
+# statistics. Default 0.0 keeps historical behaviour; pass --warmup-s to score
+# the workload rather than the model's start transient.
+WARMUP_S = 0.0
+
+
+def compute_risk_metrics(P_W, t_s, warmup_s=None):
+    warmup_s = WARMUP_S if warmup_s is None else warmup_s
+    if warmup_s > 0:
+        keep = t_s >= t_s[0] + warmup_s
+        # Refuse to score a sliver: a warm-up longer than the trace would
+        # silently produce metrics over a handful of samples.
+        if np.sum(keep) < 10:
+            raise SystemExit(
+                f"--warmup-s {warmup_s} leaves {int(np.sum(keep))} samples of a "
+                f"{t_s[-1] - t_s[0]:.1f}s trace; nothing to score")
+        P_W, t_s = P_W[keep], t_s[keep]
+
     dt      = np.diff(t_s)
     dP_MW_s = np.diff(P_W) / 1e6 / dt
 
@@ -123,11 +150,25 @@ def compute_risk_metrics(P_W, t_s):
         'n_exceedances_in_trace':    n_exceed,
         'ramp_limit_MW_s':           RAMP_LIMIT_MW_S,
         'trace_duration_s':          round(trace_s, 1),
+        'warmup_s':                  warmup_s,
     }
 
 
-def compute_freq_metrics(t_f, delta_f):
+def _drop_warmup(t, v, warmup_s):
+    """Shared warm-up trim (see WARMUP_S). Frequency and voltage are downstream
+    of the same t=0 fleet cold start, so trimming only the ramp metrics would
+    leave ROCOF still measuring the initial condition."""
+    if not warmup_s or warmup_s <= 0:
+        return t, v
+    keep = t >= t[0] + warmup_s
+    if np.sum(keep) < 10:
+        raise SystemExit(f"--warmup-s {warmup_s} leaves too few samples to score")
+    return t[keep], v[keep]
+
+
+def compute_freq_metrics(t_f, delta_f, warmup_s=None):
     """Metrics from the swing-equation frequency deviation output (Δf in Hz)."""
+    t_f, delta_f = _drop_warmup(t_f, delta_f, warmup_s)
     rocof = np.diff(delta_f) / np.diff(t_f)   # Hz/s
     nadir = float(60.0 + np.min(delta_f))
     n_uf  = int(np.sum(delta_f < FREQ_NADIR_LIMIT_HZ))
@@ -140,7 +181,7 @@ def compute_freq_metrics(t_f, delta_f):
     }
 
 
-def compute_voltage_metrics(t_v, V_pu):
+def compute_voltage_metrics(t_v, V_pu, warmup_s=None):
     """Metrics from PCC voltage magnitude (per-unit). Sag = below IEEE 1159 0.95 pu.
 
     voltage_sag_depth_pu (= 1 - min V) is the GRADED companion to the sag COUNT:
@@ -148,6 +189,7 @@ def compute_voltage_metrics(t_v, V_pu):
     0.95 standards threshold (the count then reads 0/0 and hides the improvement).
     Lower depth = safer, matching compare_pair.py's 'lower = safer' RISK convention.
     The standards count stays untouched — this is additive, not a moved threshold."""
+    t_v, V_pu = _drop_warmup(t_v, V_pu, warmup_s)
     min_v = float(np.min(V_pu))
     n_sag = int(np.sum(V_pu < VOLTAGE_SAG_LIMIT_PU))
     return {
@@ -173,6 +215,10 @@ def compute_efficiency_metrics(P_W, gflops):
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument('--warmup-s', type=float, default=WARMUP_S,
+                        help='discard this many seconds from the start before '
+                             'computing ramp metrics, removing the model-side '
+                             'fleet cold start at t=0 (default %(default)s)')
     parser.add_argument('--gflops', type=float, default=None,
                         help='Sustained HPL Gflops score for this run')
     parser.add_argument('--selfcheck', action='store_true',
@@ -199,7 +245,7 @@ def main():
             'mean_MW':      round(float(np.mean(P_pcc)) / 1e6, 4),
             'trace_energy_MJ': round(float(trapz(P_pcc, t)) / 1e6, 3),
         },
-        'risk': compute_risk_metrics(P_pcc, t),
+        'risk': compute_risk_metrics(P_pcc, t, warmup_s=args.warmup_s),
         'thresholds': {
             'ramp_limit_MW_s':         RAMP_LIMIT_MW_S,
             'ramp_limit_source':       'Southern Company 20 MW/min cap (arXiv 2601.12686)',
@@ -210,11 +256,11 @@ def main():
 
     fd_data = sanitize_2col(try_load('freq_dev.csv'))
     if fd_data is not None:
-        metrics['frequency'] = compute_freq_metrics(fd_data[:, 0], fd_data[:, 1])
+        metrics['frequency'] = compute_freq_metrics(fd_data[:, 0], fd_data[:, 1], warmup_s=args.warmup_s)
 
     vp_data = sanitize_2col(try_load('V_PCC.csv'))
     if vp_data is not None:
-        metrics['voltage'] = compute_voltage_metrics(vp_data[:, 0], vp_data[:, 1])
+        metrics['voltage'] = compute_voltage_metrics(vp_data[:, 0], vp_data[:, 1], warmup_s=args.warmup_s)
 
     if args.gflops is not None:
         metrics['efficiency'] = compute_efficiency_metrics(P_pcc, args.gflops)

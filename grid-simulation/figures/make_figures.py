@@ -3,7 +3,7 @@
 
     python3 figures/make_figures.py
 
-Reads data/clean/summary/{scoreboard,matrix}.csv and data/runs/run1/*.csv (Python +
+Reads data/summary/{scoreboard,matrix}.csv and data/runs/run1/*.csv (Python +
 matplotlib only, no MATLAB). Outputs:
 
     scoreboard.png        ranked mitigation effect, 4 headline metrics, n=4 error bars
@@ -13,7 +13,7 @@ matplotlib only, no MATLAB). Outputs:
                           plateau-aligned to baseline so the full di/dt ramp shows
     pipeline.png          the trace -> fleet -> UPS -> microgrid -> metrics chain
 
-Reads data/clean/summary/{scoreboard,matrix,full_ranking}.csv and data/runs/run1/*.csv
+Reads data/summary/{scoreboard,matrix,full_ranking}.csv and data/runs/run1/*.csv
 (full_ranking.csv is produced by analysis/rank_all.py).
 """
 import csv, statistics, sys
@@ -46,7 +46,7 @@ plt.rcParams.update({"font.size": 11, "axes.grid": True, "grid.alpha": 0.25,
 
 def read_scoreboard():
     rows = {}
-    for r in csv.DictReader(open(ROOT / "data/clean/summary/scoreboard.csv")):
+    for r in csv.DictReader(open(ROOT / "data/summary/scoreboard.csv")):
         rows[r["smoother"]] = r
     return rows
 
@@ -59,7 +59,7 @@ def read_cost_edges():
     Returns {} if the file was never generated, so the cost panels degrade to
     the single undecomposed bar rather than crashing.
     """
-    p = ROOT / "data/clean/summary/cost_edges.csv"
+    p = ROOT / "data/summary/cost_edges.csv"
     if not p.exists():
         return {}
     return {r["smoother"]: r for r in csv.DictReader(open(p))}
@@ -84,7 +84,7 @@ def _split_parts(ce, m, col):
 def read_matrix():
     """{(workload, mitigation): {metric: (mean, sd)}} across the 4 runs."""
     acc = {}
-    for r in csv.DictReader(open(ROOT / "data/clean/summary/matrix.csv")):
+    for r in csv.DictReader(open(ROOT / "data/summary/matrix.csv")):
         k = (r["workload"], (r.get("mitigation") or r["smoother"]))
         for m in ("cv_pct", "peak_pct", "runtime_pct", "energy_pct"):
             acc.setdefault(k, {}).setdefault(m, []).append(float(r[m]))
@@ -203,7 +203,7 @@ def fig_overlays(run="run1"):
     untrimmed AND time-aligned so its plateau starts where baseline starts —
     the ramp flanks then sit in negative time / past the baseline end, so the
     workloads line up for direct shape comparison."""
-    rd = ROOT / "data" / "clean" / "runs" / run
+    rd = ROOT / "data" / "runs" / run
     for m in MITIG:
         fig, axes = plt.subplots(3, 1, figsize=(9, 9), sharex=False)
         for r, w in enumerate(WORKLOADS):
@@ -267,7 +267,7 @@ def fig_all_metrics():
     lower-is-better convention reads as up=good. Outliers past the cap are
     drawn to the edge and labelled. Detector metrics are shown as an explicit
     'not yet scored' slot rather than omitted."""
-    allrows = list(csv.DictReader(open(ROOT / "data/clean/summary/full_ranking.csv")))
+    allrows = list(csv.DictReader(open(ROOT / "data/summary/full_ranking.csv")))
     order = ["direct", "perf", "coldstart", "degenerate", "cliff"]
     rows = [r for r in allrows if r["trust"] in order]          # scored grid+cost
     det = [r for r in allrows if r["trust"] == "detector"]      # named but pending
@@ -338,8 +338,8 @@ def fig_all_metrics():
     fig.savefig(FIG / "all_metrics.png"); plt.close(fig)
 
 
-SUMMARY = ROOT / "data" / "clean" / "summary"
-RUNS_DIR = ROOT / "data" / "clean" / "runs"
+SUMMARY = ROOT / "data" / "summary"
+RUNS_DIR = ROOT / "data" / "runs"
 RESULTS = ROOT / "results"
 
 
@@ -382,7 +382,7 @@ def fig_reproducibility():
         for m in MITIG:
             byrun = {}
             for r in rows:
-                if r["smoother"] == m:
+                if (r.get("mitigation") or r["smoother"]) == m:
                     byrun.setdefault(r["run"], []).append(float(r[col]))
             cats.append(m)
             series.append((m, [statistics.mean(byrun[k]) for k in sorted(byrun)],

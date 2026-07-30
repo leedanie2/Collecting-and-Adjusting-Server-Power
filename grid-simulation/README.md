@@ -49,13 +49,21 @@ simulation/    MATLAB — fleet aggregation (readscript.m), model builder
                model (microgrid_phasor.slx)
 analysis/      Python scoring — grid_metrics.py (per-run metrics),
                compare_pair.py (baseline vs smoother), summarize_n3.py (the
-               n=4 scoreboard), plot_traces.py
-scripts/       build_model.sh, sim_trace.sh, score_all.sh, nrun_pipeline.sh
+               n=4 scoreboard), rank_all.py (all thirteen metrics),
+               score_detector.py (detection quality), plot_traces.py
+scripts/       quiesce.sh / recollect.sh (collect the matrix, see below),
+               build_model.sh, sim_trace.sh, score_all.sh, nrun_pipeline.sh
                (regenerate the n=4 result), trim_auto.py / trim_rampc.py (trace
                prep, see below)
+figures/       make_figures.py (every figure from the checked-in summaries),
+               make_experiment_figs.py (workload and schematic figures)
 data/traces/   input power traces, named <workload>_<method>.csv (one run)
 data/runs/     run{1,2,3,4}/  the four repeat collections (raw traces + logs)
-data/summary/  the n=4 scoreboard: scoreboard.csv, matrix.csv, summary.md
+data/detector/ run{1,2,3,4}/  workload phase logs + governor event logs, the
+               inputs for detection scoring (see the README there — these are
+               NOT from the same collection as data/runs/)
+data/summary/  the n=4 scoreboard: scoreboard.csv, matrix.csv, summary.md,
+               full_ranking.{csv,md}, detector_scores.csv
 data/comparisons/, data/plots/   scored comparisons and baseline/smoother overlays
 results/<run>_worst/       one-run simulation outputs (S_PCC, freq_dev, V_PCC) + metrics.json
 results/<run>_r<N>_worst/  per-run metrics.json for the n=4 scoreboard
@@ -71,6 +79,44 @@ baseline-vs-mitigation comparisons. The whole matrix was collected four times
 (`data/runs/run{1,2,3,4}/`) so the headline scoreboard reports mean ± SD, not a
 single draw. `data/traces/` holds one representative run for the per-pair tables
 and plots.
+
+### How a collection was taken
+
+The server's own observability stack is loud enough to matter: the time-series
+database alone runs continuously at most of a core and bursts every 5 s, which
+is a ~15 W ripple sitting inside every trace. So each collection quiesces the
+box first, and traces go straight to CSV rather than through the database that
+would otherwise be one of the things being measured.
+
+```bash
+sudo scripts/quiesce.sh dry-run    # what would be stopped; touches nothing
+sudo scripts/quiesce.sh stop       # tear down, recording what was running
+sudo scripts/recollect.sh          # the 12 cells
+sudo scripts/quiesce.sh start      # put it all back
+```
+
+`quiesce.sh` records what it stopped so `start` restores exactly that, and
+refuses to hand-restart anything under a systemd unit — a supervised process
+comes back on its own, and a hand-restored copy becomes a duplicate.
+`recollect.sh` resumes rather than restarting from zero if a cell fails, and
+pins the AI simulation's schedule seed so a mitigation's effect is never
+confounded with schedule luck. Both need the instrumented server.
+
+### Detection quality
+
+`analysis/score_detector.py` scores what the governor actually did against the
+workload's own phase log:
+
+```bash
+python3 analysis/score_detector.py    # -> data/summary/detector_scores.csv
+```
+
+Pooled over four runs it recalls 8 of 24 transitions (33%) at 19% precision,
+with a median lead of −0.23 s — that is, the actuator moves *after* the
+transition, not before. This is the quantitative form of the reactive-design
+limitation: the detector fires on a change that has already begun. Read the
+lead times with the ±0.5 s anchor uncertainty documented in
+`data/detector/README.md`; nearly all of them are inside it.
 
 ## Reproduce with Python only (no MATLAB)
 

@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Rank ALL grid metrics, not just the four the headline scoreboard trusts.
 
-summarize_n3.py deliberately ranks on the four metrics that discriminate. This
+summarize_n4.py deliberately ranks on the four metrics that discriminate. This
 ranks every metric the pipeline emits, per mitigation, mean +/- SD across the 4
 runs, with the winner marked and a trust tag so the reader knows which rankings
 mean something. Nothing is hidden -- but the tag says which to believe.
 
-    python3 analysis/rank_all.py           # -> data/clean/summary/full_ranking.{csv,md}
+    python3 analysis/rank_all.py           # -> data/summary/full_ranking.{csv,md}
     python3 analysis/rank_all.py --selfcheck
 
 Cost (runtime, energy) is the full untrimmed trace; everything else is the
@@ -23,7 +23,7 @@ WORKLOADS = ["hpl", "aisim2", "step"]
 MITIG = ["rampc", "powersmoother", "usagegov"]
 
 # (label, source, trust). source: ('cost', kind) or (section, key) in metrics.json.
-# trust: direct | perf | coldstart | degenerate | cliff  (see summarize_n3.py).
+# trust: direct | perf | coldstart | degenerate | cliff  (see summarize_n4.py).
 METRICS = [
     ("CV",                 ("risk", "cv"),                          "direct"),
     ("peak-to-mean",       ("risk", "peak_to_mean"),               "direct"),
@@ -45,13 +45,43 @@ TRUST_NOTE = {
     "coldstart": "dominated by the model's t=0 cold start; needs WARMUP_S=45 to mean anything",
     "degenerate": "no signal — one t=0 exceedance per run makes it ~constant",
     "cliff": "count across a threshold both sides sit ~equal distance from",
-    "detector": "detection quality of usage_edge / RF — NOT YET SCORED "
-                "(needs a mycroft eval run with /proc/stat + onset labels; see RESULTS.md)",
+    "detector": "ABSOLUTE values, not % vs baseline, and only usagegov has a "
+                "detector — see analysis/score_detector.py. aisim2 only: hpl and "
+                "step emit no phase log to score against",
 }
-# Named so the gap is explicit, not a silent omission. Filled by a detector
-# eval run (usage_edge.py / RF evaluator.py), which the power traces can't supply.
+# Absolute quantities from data/summary/detector_scores.csv, pooled over
+# the 4 runs and both transition directions. Only usagegov ran a detector, so
+# every other arm is n/a here rather than a missing measurement.
 DETECTOR_METRICS = ["event recall", "event latency (s)", "lead time (s)",
                     "alert precision"]
+DETECTOR_ARM = "usagegov"
+DETECTOR_CSV = ROOT / "data/summary/detector_scores.csv"
+
+
+def detector_pooled():
+    """-> {label: value} pooled over runs and directions, or {} if unscored."""
+    if not DETECTOR_CSV.exists():
+        return {}
+    rows = list(csv.DictReader(open(DETECTOR_CSV)))
+    if not rows:
+        return {}
+    det = sum(int(r["n_detected"]) for r in rows)
+    tot = sum(int(r["n_truth"]) for r in rows)
+    eps = sum(int(r["n_alert_episodes"]) for r in rows)
+    matched = sum(round(float(r["precision"]) * int(r["n_alert_episodes"]))
+                  for r in rows if r["precision"] not in ("", "nan"))
+    lat = [float(r["latency_median_s"]) for r in rows
+           if r["latency_median_s"] not in ("", "nan")]
+    if not tot:
+        return {}
+    med = statistics.median(lat) if lat else None
+    return {
+        "event recall": det / tot,
+        "event latency (s)": med,
+        # lead is just latency negated: positive = fired BEFORE the transition
+        "lead time (s)": None if med is None else -med,
+        "alert precision": (matched / eps) if eps else None,
+    }
 
 
 def energy_and_dur(csv_path):
@@ -103,9 +133,13 @@ def rank():
         cand = [(v[0], s) for s, v in per_mitig.items() if v[0] is not None]
         winner = min(cand)[1] if cand else None
         out.append((label, trust, per_mitig, winner))
-    # detector rows: named but unscored, so the scoreboard shows the gap
+    # detector rows: absolute values, and only for the arm that has a detector
+    pooled = detector_pooled()
     for label in DETECTOR_METRICS:
-        out.append((label, "detector", {m: (None, None) for m in MITIG}, None))
+        cells = {m: (None, None) for m in MITIG}
+        if label in pooled and pooled[label] is not None:
+            cells[DETECTOR_ARM] = (pooled[label], None)
+        out.append((label, "detector", cells, None))
     out.sort(key=lambda r: TRUST_ORDER.index(r[1]))
     return out
 
@@ -121,9 +155,10 @@ def write_csv(rows, out):
         w.writerow(["metric", "trust", "winner"]
                    + [f"{m}_pct" for m in MITIG] + [f"{m}_sd" for m in MITIG])
         for label, trust, pm, winner in rows:
-            win = "pending" if trust == "detector" else (winner or "")
+            win = "n/a" if trust == "detector" else (winner or "")
             w.writerow([label, trust, win]
-                       + ["pending" if trust == "detector" else
+                       + [("n/a" if pm[m][0] is None else round(pm[m][0], 3))
+                          if trust == "detector" else
                           ("" if pm[m][0] is None else round(pm[m][0], 1)) for m in MITIG]
                        + ["" if pm[m][1] is None else round(pm[m][1], 1) for m in MITIG])
 
@@ -144,11 +179,12 @@ def write_md(rows, out):
         cells = []
         for m in MITIG:
             if trust == "detector":
-                cells.append("_pending_")
+                # not bolded: bold means "winner", and a single-arm row has no contest
+                cells.append("_n/a_" if pm[m][0] is None else f"{pm[m][0]:.2f}")
             else:
                 s = fmt(pm[m])
                 cells.append(f"**{s}**" if m == winner and pm[m][0] is not None else s)
-        win = "_pending_" if trust == "detector" else (winner or "—")
+        win = "_n/a_" if trust == "detector" else (winner or "—")
         L.append(f"| {label} | {trust} | " + " | ".join(cells) + f" | {win} |")
     L += ["", "### Trust tags", ""]
     for t in TRUST_ORDER:
