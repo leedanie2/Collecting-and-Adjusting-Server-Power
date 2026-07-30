@@ -14,10 +14,16 @@ import sys
 import time
 from pathlib import Path
 
-from core import telemetry as common
+# The detector ships next to the actuator it drives, but borrows the prediction
+# package's InfluxDB helpers rather than keeping a second copy of them.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "prediction"))
+from core import telemetry as common  # noqa: E402
 
 DEFAULT_THRESHOLD_PCT = 20.0
-DEFAULT_RISE_PCT_PER_S = 25.0
+DEFAULT_SLOPE_PCT_PER_S = 25.0
+# Same number, old name: the offline scorer and the Influx field names still
+# say "rise", and renaming those would break existing dashboards/queries.
+DEFAULT_RISE_PCT_PER_S = DEFAULT_SLOPE_PCT_PER_S
 DEFAULT_CYCLE_S = 0.10
 DEFAULT_PULSE_S = 1.0
 DEFAULT_COOLDOWN_S = 5.0
@@ -51,15 +57,29 @@ def cpu_usage(prev, curr):
     return 100.0 * (1.0 - (curr_idle - prev_idle) / dt)
 
 
-def usage_edge_fired(prev_usage, usage, dt_s, threshold, min_rise_per_s):
-    """Same edge semantics as ramp.c's built-in --usage-edge path."""
+def usage_edge_fired(prev_usage, usage, dt_s, threshold, min_slope_per_s):
+    """Signed edge detect: +1 rising, -1 falling, 0 quiet.
+
+    Same edge semantics as ramp.c's built-in --usage-edge path, generalised to
+    both directions by taking |slope| -- a drop is just a rise with the sign
+    flipped, and the actuator (ballast vs ceiling) is what differs, not the
+    detection. Truthiness is unchanged for callers that want a bool: 0 is
+    falsy, +/-1 are truthy.
+
+    The level gate now looks at BOTH sides of the step: an onset ends loaded,
+    a drop *starts* loaded, so gating on the current level alone would make
+    every drop invisible.
+    """
     if dt_s <= 0.0:
-        return False
-    if usage < threshold:
-        return False
-    if prev_usage < threshold:
-        return True
-    return ((usage - prev_usage) / dt_s) >= min_rise_per_s
+        return 0
+    if max(prev_usage, usage) < threshold:
+        return 0                                  # neither side loaded
+    direction = 1 if usage >= prev_usage else -1
+    if min(prev_usage, usage) < threshold:
+        return direction                          # crossed the threshold
+    if abs(usage - prev_usage) / dt_s >= min_slope_per_s:
+        return direction
+    return 0
 
 
 def usage_edge_flags(index, usage, threshold=DEFAULT_THRESHOLD_PCT,
@@ -142,33 +162,38 @@ def write_prediction(write_api, measurement, usage, prev_usage, risk, edge,
 
 class UsageEdgeState:
     def __init__(self, threshold=DEFAULT_THRESHOLD_PCT,
-                 min_rise_per_s=DEFAULT_RISE_PCT_PER_S,
+                 min_slope_per_s=DEFAULT_SLOPE_PCT_PER_S,
                  pulse_s=DEFAULT_PULSE_S,
                  cooldown_s=DEFAULT_COOLDOWN_S):
         self.threshold = float(threshold)
-        self.min_rise_per_s = float(min_rise_per_s)
+        self.min_slope_per_s = float(min_slope_per_s)
         self.pulse_s = float(pulse_s)
         self.cooldown_s = float(cooldown_s)
         self.pulse_until = 0.0
         self.cooldown_until = 0.0
+        self.pulse_dir = 0
 
     def update(self, prev_usage, usage, dt_s, now=None):
+        """-> (risk, edge, direction). direction is +1/-1 while the pulse is
+        live, 0 when quiet -- the consumer picks the actuator from the sign
+        (ceiling for +1, ballast for -1)."""
         now = time.monotonic() if now is None else float(now)
         edge = False
-        if now >= self.cooldown_until and usage_edge_fired(
-            prev_usage, usage, dt_s, self.threshold, self.min_rise_per_s
-        ):
+        fired = usage_edge_fired(prev_usage, usage, dt_s, self.threshold,
+                                 self.min_slope_per_s)
+        if now >= self.cooldown_until and fired:
             edge = True
+            self.pulse_dir = fired
             self.pulse_until = now + self.pulse_s
             self.cooldown_until = now + self.cooldown_s
         risk = now < self.pulse_until
-        return int(risk), edge
+        return int(risk), edge, (self.pulse_dir if risk else 0)
 
 
-def run(risk_file, threshold, min_rise_per_s, cycle_s, pulse_s, cooldown_s,
+def run(risk_file, threshold, min_slope_per_s, cycle_s, pulse_s, cooldown_s,
         samples=0, dry_run=False, json_lines=False, influx=False,
-        measurement=DEFAULT_MEASUREMENT):
-    state = UsageEdgeState(threshold, min_rise_per_s, pulse_s, cooldown_s)
+        measurement=DEFAULT_MEASUREMENT, drop_risk_file=None):
+    state = UsageEdgeState(threshold, min_slope_per_s, pulse_s, cooldown_s)
     prev_stat = read_total_cpu_stat()
     prev_t = time.monotonic()
     prev_usage = None
@@ -192,23 +217,32 @@ def run(risk_file, threshold, min_rise_per_s, cycle_s, pulse_s, cooldown_s,
             dt_s = max(curr_t - prev_t, 1e-9)
 
             if prev_usage is None:
-                risk, edge = 0, False
+                risk, edge, direction = 0, False, 0
             else:
-                risk, edge = state.update(prev_usage, usage, dt_s, now=curr_t)
+                risk, edge, direction = state.update(prev_usage, usage, dt_s,
+                                                     now=curr_t)
 
             if not dry_run:
-                common.write_risk_flag(risk_file, bool(risk))
+                # Split by sign: the rise flag arms the RAPL ceiling, the drop
+                # flag arms ballast. Both are written every cycle so each one's
+                # mtime stays fresh -- a consumer reads >15 s stale as
+                # no-signal, so a flag left unwritten would read as dead rather
+                # than as "quiet in that direction".
+                common.write_risk_flag(risk_file, direction > 0)
+                if drop_risk_file is not None:
+                    common.write_risk_flag(drop_risk_file, direction < 0)
             if write_api is not None:
                 write_prediction(write_api, measurement, usage, prev_usage,
-                                 risk, edge, threshold, min_rise_per_s)
+                                 risk, edge, threshold, min_slope_per_s)
             if json_lines:
                 print(json.dumps({
                     "usage_percent": usage,
                     "prev_usage_percent": prev_usage,
                     "risk": risk,
                     "edge": int(edge),
+                    "direction": int(direction),
                     "threshold": float(threshold),
-                    "min_rise_per_s": float(min_rise_per_s),
+                    "min_rise_per_s": float(min_slope_per_s),
                 }), flush=True)
 
             prev_stat = curr_stat
@@ -228,16 +262,28 @@ def selfcheck():
     assert usage_edge_fired(30.0, 40.0, 0.1, 20.0, 25.0)
     assert not usage_edge_fired(30.0, 31.0, 0.1, 20.0, 25.0)
 
-    state = UsageEdgeState(threshold=20.0, min_rise_per_s=25.0,
+    # Drops are the same edge with the sign flipped -- mirror of the four above.
+    assert usage_edge_fired(22.0, 2.0, 0.1, 20.0, 25.0) == -1     # crossed down
+    assert usage_edge_fired(40.0, 30.0, 0.1, 20.0, 25.0) == -1    # steep fall
+    assert usage_edge_fired(31.0, 30.0, 0.1, 20.0, 25.0) == 0     # gentle fall
+    assert usage_edge_fired(4.0, 2.0, 0.1, 20.0, 25.0) == 0       # both idle
+    # Rises keep their old truthiness AND now carry a sign.
+    assert usage_edge_fired(2.0, 22.0, 0.1, 20.0, 25.0) == 1
+
+    state = UsageEdgeState(threshold=20.0, min_slope_per_s=25.0,
                            pulse_s=1.0, cooldown_s=3.0)
-    risk, edge = state.update(2.0, 30.0, 0.1, now=10.0)
-    assert risk == 1 and edge, (risk, edge)
-    risk, edge = state.update(30.0, 90.0, 0.1, now=10.5)
-    assert risk == 1 and not edge, (risk, edge)
-    risk, edge = state.update(10.0, 50.0, 0.1, now=11.2)
-    assert risk == 0 and not edge, (risk, edge)
-    risk, edge = state.update(10.0, 50.0, 0.1, now=13.1)
-    assert risk == 1 and edge, (risk, edge)
+    risk, edge, d = state.update(2.0, 30.0, 0.1, now=10.0)
+    assert (risk, edge, d) == (1, True, 1), (risk, edge, d)
+    risk, edge, d = state.update(30.0, 90.0, 0.1, now=10.5)
+    assert (risk, edge, d) == (1, False, 1), (risk, edge, d)
+    risk, edge, d = state.update(10.0, 50.0, 0.1, now=11.2)
+    assert (risk, edge, d) == (0, False, 0), (risk, edge, d)
+    risk, edge, d = state.update(10.0, 50.0, 0.1, now=13.1)
+    assert (risk, edge, d) == (1, True, 1), (risk, edge, d)
+    # A fall after cooldown pulses with direction -1, so the consumer arms
+    # ballast rather than the ceiling.
+    risk, edge, d = state.update(90.0, 30.0, 0.1, now=20.0)
+    assert (risk, edge, d) == (1, True, -1), (risk, edge, d)
 
     import tempfile
     with tempfile.TemporaryDirectory() as td:
@@ -265,11 +311,17 @@ def selfcheck():
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--risk-file", default=str(DEFAULT_RISK_FILE),
-                   help="0/1 flag path consumed by ramp.c --risk-file")
+                   help="0/1 flag path for RISING edges (ramp.c --risk-file, "
+                        "rapl_capper --risk-file -> RAPL ceiling)")
+    p.add_argument("--drop-risk-file", default=None,
+                   help="0/1 flag path for FALLING edges (rapl_capper "
+                        "--drop-risk-file -> ballast). Unset = rises only, "
+                        "which is the pre-2026-07-27 behaviour.")
     p.add_argument("--threshold", type=float, default=DEFAULT_THRESHOLD_PCT,
                    help="aggregate CPU usage percent that starts an edge")
-    p.add_argument("--rise", type=float, default=DEFAULT_RISE_PCT_PER_S,
-                   help="minimum aggregate usage rise rate in percent/s")
+    p.add_argument("--rise", type=float, default=DEFAULT_SLOPE_PCT_PER_S,
+                   help="minimum |aggregate usage slope| in percent/s; applies "
+                        "to both directions (name kept for compatibility)")
     p.add_argument("--cycle-s", type=float, default=DEFAULT_CYCLE_S,
                    help="/proc/stat polling interval")
     p.add_argument("--pulse-s", type=float, default=DEFAULT_PULSE_S,
@@ -325,7 +377,9 @@ def main():
     run(Path(args.risk_file), args.threshold, args.rise, args.cycle_s,
         args.pulse_s, args.cooldown_s, samples=args.samples,
         dry_run=args.dry_run, json_lines=args.json, influx=args.influx,
-        measurement=args.measurement)
+        measurement=args.measurement,
+        drop_risk_file=(Path(args.drop_risk_file)
+                        if args.drop_risk_file else None))
 
 
 if __name__ == "__main__":

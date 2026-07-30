@@ -1,25 +1,30 @@
 #!/usr/bin/env python3
-"""Trim a ramp.c trace to its real-workload window.
+"""Trim a ramp.c smoother trace to its real-workload window.
 
-ramp.c pre-ramps ballast before the real workload and ramps it down after,
-padding the trace 2.1-2.4x with slow, near-flat power. Because the grid metrics
-annualize event counts by trace duration, that padding alone deflates the risk
-scores. Trimming to the real-workload window duration-matches each ramp.c trace
-to its baseline before scoring.
+ramp.c pre-ramps ballast before launching the real workload and ramps it back
+down after, padding the trace by 2.1-2.4x. That padding is slow, near-flat power
+with almost no grid-ramp exceedances, so grid_metrics.annualize()
+(count * SECONDS_PER_YEAR / trace_duration) divides the SAME real exceedance
+events by a longer duration and reports a fake "risk reduction" that tracks the
+trace-length ratio, not smoother efficacy. Trim the padding so each ramp.c trace
+is scored over the real-workload window only, duration-matched to its baseline.
 
-Offsets are the workload launch (up) and ramp-down start (down), in seconds,
-from ramp.c's debug log:
+Offsets are ramp.c's own debug-log tick counts (0.1 s/tick) — real-workload
+launch (up) and ramp-down start (down):
 
-    hpl      up 86.7  down 49.8   -> ~120.4 s window (baseline 119.9)
-    aisim2   up 86.7  down 48.5   -> ~120.7 s window (baseline 121.0)
-    step     up 62.0  down 62.0   -> ~143.1 s window (baseline 110.8)
+    hpl_rampc     up 86.7 s   down 49.8 s   -> real window ~120.4 s (baseline 119.9)
+    aisim2_rampc  up 86.7 s   down 48.5 s   -> real window ~120.7 s (baseline 121.0)
+    step_rampc    up 62.0 s   down 62.0 s   -> real window ~143.1 s (baseline 110.8)
 
-hpl and aisim2 land within 0.4 s of their baselines. step stays longer because
-ramp.c's core-affinity cap dilates the step workload's own timing.
+hpl/aisim2 land within ~0.4 s of their baselines, validating the offsets. step's
+window stays ~1.3x longer than baseline because ramp.c's core-affinity cap dilates
+the step workload's own internal timing (documented limitation, not padding);
+annualizing each trace by its own real-workload duration is still fair once the
+ballast padding is gone.
 
-Keeps samples with t0+up <= t <= tend-down, then re-zeros time to 0.
+Keeps samples with t0+up <= t <= tend-down, then re-zeros time to start at 0.
 
-    trim_rampc.py <in.csv> <up_s> <down_s> [out.csv]   # out defaults to in
+    trim_rampc.py <in.csv> <up_s> <down_s> [out.csv]   # out defaults to in (overwrite)
     trim_rampc.py --selfcheck
 """
 import csv, sys

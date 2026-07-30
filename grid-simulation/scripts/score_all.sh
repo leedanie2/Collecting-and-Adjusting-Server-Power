@@ -5,6 +5,7 @@
 #
 #   scripts/score_all.sh                                  # every results dir
 #   scripts/score_all.sh rapl_hpl_noctl rapl_hpl_noctl_worst   # only these
+#   WARMUP_S=45 scripts/score_all.sh                      # drop the t=0 cold start
 #
 # Run scripts/compare.py-side by hand afterwards:  python3 analysis/compare.py
 set -euo pipefail
@@ -32,6 +33,9 @@ for d in dirs:
             or re.match(r'(.*)$', d)).group(1)
     g = meta.get(base)
     cmd = ['python3', '../../analysis/grid_metrics.py']
+    w = os.environ.get('WARMUP_S')
+    if w:
+        cmd += ['--warmup-s', w]
     if g not in (None, '', 'NA'):
         cmd += ['--gflops', g]
     subprocess.run(cmd, cwd=p, check=True)

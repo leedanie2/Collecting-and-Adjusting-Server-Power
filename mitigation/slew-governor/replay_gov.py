@@ -29,8 +29,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from actuators import rapl_capper as rc  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import rapl_capper as rc  # noqa: E402
 
 UNDERSHOOT_W = 30.0
 TICK_S = rc.GOV_POLL_S

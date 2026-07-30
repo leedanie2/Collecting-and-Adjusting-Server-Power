@@ -3,18 +3,17 @@
 
     python3 figures/make_figures.py
 
-Reads data/summary/{scoreboard,matrix}.csv and data/runs/run1/*.csv (Python +
+Reads data/clean/summary/{scoreboard,matrix}.csv and data/runs/run1/*.csv (Python +
 matplotlib only, no MATLAB). Outputs:
 
     scoreboard.png        ranked mitigation effect, 4 headline metrics, n=4 error bars
     all_metrics.png       EVERY metric x 3 mitigations, y-axis inverted (up=better),
                           trust-tiered; detector slot marked 'not yet scored'
-    per_workload.png      CV and energy split by workload (the averages hide a lot)
     overlay_<mitig>.png   baseline-vs-mitigation power traces; ramp.c UNTRIMMED and
                           plateau-aligned to baseline so the full di/dt ramp shows
     pipeline.png          the trace -> fleet -> UPS -> microgrid -> metrics chain
 
-Reads data/summary/{scoreboard,matrix,full_ranking}.csv and data/runs/run1/*.csv
+Reads data/clean/summary/{scoreboard,matrix,full_ranking}.csv and data/runs/run1/*.csv
 (full_ranking.csv is produced by analysis/rank_all.py).
 """
 import csv, statistics, sys
@@ -24,8 +23,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.patches import FancyBboxPatch, FancyArrowPatch
 
-ROOT = Path(__file__).resolve().parent.parent
-FIG = ROOT / "figures"
+FIG = Path(__file__).resolve().parent
+ROOT = FIG.parent
 sys.path.insert(0, str(ROOT / "scripts"))
 from trim_auto import load as trim_load, detect_window  # noqa: E402
 
@@ -33,9 +32,12 @@ WORKLOADS = ["hpl", "aisim2", "step"]
 MITIG = ["rampc", "powersmoother", "usagegov"]
 # Okabe-Ito colourblind-safe. baseline grey, one hue per mitigation.
 C = {"baseline": "#4d4d4d", "rampc": "#0072B2",
-     "powersmoother": "#E69F00", "usagegov": "#009E73"}
+     "powersmoother": "#E69F00", "usagegov": "#CC79A7"}
 LABEL = {"rampc": "ramp.c (di/dt shaping)", "powersmoother": "power smoother",
-         "usagegov": "slew governor"}
+         "usagegov": "usage governor"}
+# tick labels: keep keyed to MITIG, never a positional literal
+SHORT = {"rampc": "ramp.c", "powersmoother": "smoother",
+         "usagegov": "usagegov"}
 plt.rcParams.update({"font.size": 11, "axes.grid": True, "grid.alpha": 0.25,
                      "axes.axisbelow": True, "figure.dpi": 130,
                      "savefig.bbox": "tight", "axes.spines.top": False,
@@ -44,16 +46,46 @@ plt.rcParams.update({"font.size": 11, "axes.grid": True, "grid.alpha": 0.25,
 
 def read_scoreboard():
     rows = {}
-    for r in csv.DictReader(open(ROOT / "data/summary/scoreboard.csv")):
+    for r in csv.DictReader(open(ROOT / "data/clean/summary/scoreboard.csv")):
         rows[r["smoother"]] = r
     return rows
+
+
+def read_cost_edges():
+    """{mitigation: row} from analysis/cost_edges.py.
+
+    Splits ramp.c's runtime/energy into the ballast ramp legs and the workload
+    window. Only rampc has a split; the other two have empty *_without_* cells.
+    Returns {} if the file was never generated, so the cost panels degrade to
+    the single undecomposed bar rather than crashing.
+    """
+    p = ROOT / "data/clean/summary/cost_edges.csv"
+    if not p.exists():
+        return {}
+    return {r["smoother"]: r for r in csv.DictReader(open(p))}
+
+
+def _split_parts(ce, m, col):
+    """(workload_share, ramp_leg_share) in percentage points, or None.
+
+    Both figures are ratios against the SAME baseline, so the legs' share is an
+    exact subtraction -- see analysis/cost_edges.py.
+    """
+    r = ce.get(m)
+    if not r:
+        return None
+    tot, wo = r.get(col + "_with_pct"), r.get(col + "_without_pct")
+    if not tot or not wo:
+        return None
+    tot, wo = float(tot), float(wo)
+    return wo, tot - wo
 
 
 def read_matrix():
     """{(workload, mitigation): {metric: (mean, sd)}} across the 4 runs."""
     acc = {}
-    for r in csv.DictReader(open(ROOT / "data/summary/matrix.csv")):
-        k = (r["workload"], r["mitigation"])
+    for r in csv.DictReader(open(ROOT / "data/clean/summary/matrix.csv")):
+        k = (r["workload"], (r.get("mitigation") or r["smoother"]))
         for m in ("cv_pct", "peak_pct", "runtime_pct", "energy_pct"):
             acc.setdefault(k, {}).setdefault(m, []).append(float(r[m]))
     out = {}
@@ -65,30 +97,72 @@ def read_matrix():
 
 
 # ── Figure 1: the scoreboard ──────────────────────────────────────────────────
-def fig_scoreboard(sb):
+def fig_scoreboard(sb, ce=None):
+    """Headline 4 metrics. The two cost panels decompose ramp.c's bar.
+
+    ramp.c's +121% runtime / +161% energy dwarf the other two arms and read as
+    a single opaque penalty. Most of that is the ballast ramp legs, not the
+    mitigation slowing the workload, so those bars are stacked: the solid
+    segment is the workload window, the hatched segment the ramp legs. The
+    total is unchanged, and the error bar stays on the total because that is
+    what scoreboard.csv carries a run-to-run SD for.
+    """
+    ce = ce or {}
     metrics = [("cv_pct", "CV (flatness)"), ("peak_pct", "peak-to-mean"),
                ("runtime_pct", "runtime"), ("energy_pct", "energy")]
+    SPLITTABLE = {"runtime_pct": "runtime", "energy_pct": "energy"}
     fig, axes = plt.subplots(1, 4, figsize=(13, 4.2))
+    split_drawn = False
     for ax, (col, title) in zip(axes, metrics):
         xs = range(len(MITIG))
         vals = [float(sb[m][col]) for m in MITIG]
         errs = [float(sb[m][col + "_sd"]) for m in MITIG]
-        bars = ax.bar(xs, vals, yerr=errs, capsize=5,
-                      color=[C[m] for m in MITIG], edgecolor="black", linewidth=0.6)
+        for i, m in enumerate(MITIG):
+            parts = _split_parts(ce, m, SPLITTABLE[col]) if col in SPLITTABLE else None
+            if parts:
+                work, legs = parts
+                ax.bar(i, work, color=C[m], edgecolor="black", linewidth=0.6)
+                ax.bar(i, legs, bottom=work, color=C[m], alpha=0.32,
+                       edgecolor="black", linewidth=0.6, hatch="///")
+                ax.errorbar(i, vals[i], yerr=errs[i], fmt="none",
+                            ecolor="black", capsize=5, elinewidth=1.2)
+                ax.annotate(f"{work:+.0f}%", (i, work / 2), ha="center",
+                            va="center", fontsize=8, color="white",
+                            fontweight="bold")
+                split_drawn = True
+            else:
+                ax.bar(i, vals[i], yerr=errs[i], capsize=5, color=C[m],
+                       edgecolor="black", linewidth=0.6)
+            v, e = vals[i], errs[i]
+            ax.annotate(f"{v:+.0f}%", (i, v + (e + 1) * (1 if v >= 0 else -1)),
+                        ha="center", va="bottom" if v >= 0 else "top", fontsize=9)
         ax.axhline(0, color="black", linewidth=0.8)
         ax.set_title(title, fontweight="bold")
         ax.set_xticks(list(xs))
-        ax.set_xticklabels(["ramp.c", "smoother", "gov"], rotation=25, ha="right")
+        ax.set_xticklabels([SHORT[m] for m in MITIG], rotation=25, ha="right")
         ax.margins(x=0.15)
         ax.set_ylabel("% vs baseline")
-        for b, v, e in zip(bars, vals, errs):
-            off = 3 if v >= 0 else -3
-            ax.annotate(f"{v:+.0f}%", (b.get_x() + b.get_width() / 2, v + (e + 1) * (1 if v >= 0 else -1)),
-                        ha="center", va="bottom" if v >= 0 else "top", fontsize=9)
+        # the +/-N% callouts sit outside the bars, so pad whichever end they
+        # run off; without this the CV panel clips its own -69% label.
+        lo, hi = ax.get_ylim()
+        pad = 0.14 * (hi - lo)
+        ax.set_ylim(lo - (pad if min(vals) < 0 else 0),
+                    hi + (pad if max(vals) > 0 else 0))
     axes[0].text(0.0, 1.14, "Lower is better for CV / peak / runtime · energy is a cost",
                  transform=axes[0].transAxes, fontsize=9, color="#555")
+    if split_drawn:
+        solid = plt.Rectangle((0, 0), 1, 1, facecolor=C["rampc"],
+                              edgecolor="black", linewidth=0.6)
+        hatched = plt.Rectangle((0, 0), 1, 1, facecolor=C["rampc"], alpha=0.32,
+                                edgecolor="black", linewidth=0.6, hatch="///")
+        # figure level, not in-axes: ramp.c's bar plus its total callout fills
+        # the cost panels top to bottom, so any in-axes corner covers something.
+        fig.legend([solid, hatched], ["ramp.c: workload window",
+                                      "ramp.c: ballast ramp legs"],
+                   fontsize=9, ncol=2, frameon=False,
+                   loc="upper right", bbox_to_anchor=(1.0, 1.045))
     fig.suptitle("Grid-impact of three power mitigations  (n=4 runs, mean ± SD)",
-                 fontsize=14, fontweight="bold", y=1.02)
+                 fontsize=14, fontweight="bold", x=0.02, y=1.03, ha="left")
     fig.tight_layout()
     fig.savefig(FIG / "scoreboard.png"); plt.close(fig)
 
@@ -129,7 +203,7 @@ def fig_overlays(run="run1"):
     untrimmed AND time-aligned so its plateau starts where baseline starts —
     the ramp flanks then sit in negative time / past the baseline end, so the
     workloads line up for direct shape comparison."""
-    rd = ROOT / "data" / "runs" / run
+    rd = ROOT / "data" / "clean" / "runs" / run
     for m in MITIG:
         fig, axes = plt.subplots(3, 1, figsize=(9, 9), sharex=False)
         for r, w in enumerate(WORKLOADS):
@@ -193,7 +267,7 @@ def fig_all_metrics():
     lower-is-better convention reads as up=good. Outliers past the cap are
     drawn to the edge and labelled. Detector metrics are shown as an explicit
     'not yet scored' slot rather than omitted."""
-    allrows = list(csv.DictReader(open(ROOT / "data/summary/full_ranking.csv")))
+    allrows = list(csv.DictReader(open(ROOT / "data/clean/summary/full_ranking.csv")))
     order = ["direct", "perf", "coldstart", "degenerate", "cliff"]
     rows = [r for r in allrows if r["trust"] in order]          # scored grid+cost
     det = [r for r in allrows if r["trust"] == "detector"]      # named but pending
@@ -221,12 +295,23 @@ def fig_all_metrics():
                 ax.annotate(f"{true:+.0f}%", (x, v), ha="center",
                             va="top" if v > 0 else "bottom", fontsize=7,
                             color=C[m], fontweight="bold")
-    # detector tier: named metrics, greyed, marked pending (need a mycroft eval)
+    # detector tier: ABSOLUTE values on a different scale from the % bars, so
+    # they are annotated rather than plotted -- a 0.33 recall drawn against a
+    # +160% energy bar would be a lie by axis.
     if det:
         lo, hi = len(rows), len(rows) + len(det) - 1
         ax.axvspan(lo - 0.5, hi + 0.5, color="#bbbbbb", alpha=0.30, zorder=0)
-        ax.text((lo + hi) / 2, 0, "PENDING\n(needs detector\neval run)",
-                ha="center", va="center", fontsize=9, color="#555",
+        def _v(name):
+            for r in det:
+                if r["metric"] == name:
+                    x = r.get("usagegov_pct", "")
+                    return "n/a" if x in ("", "n/a") else f"{float(x):.2f}"
+            return "n/a"
+        ax.text((lo + hi) / 2, 0,
+                "usagegov only, absolute\n"
+                f"recall {_v('event recall')}   prec {_v('alert precision')}\n"
+                f"lead {_v('lead time (s)')} s   (aisim2)",
+                ha="center", va="center", fontsize=8, color="#333",
                 style="italic", fontweight="bold")
         ax.text((lo + hi) / 2, -CAP * 0.96, "detector", ha="center",
                 fontsize=9, color="#333", fontweight="bold")
@@ -246,42 +331,80 @@ def fig_all_metrics():
     ax.set_ylim(-CAP, CAP); ax.invert_yaxis()          # negative (better) points UP
     ax.set_ylabel("% change vs baseline\n(↑ better · ↓ worse)")
     ax.legend(loc="lower left", fontsize=10, framealpha=0.95)
-    ax.set_title("Every metric, all three mitigations  (n=4, mean ± SD · y-axis "
+    ax.set_title(f"Every metric, all {len(MITIG)} mitigations  (n=4, mean ± SD · y-axis "
                  "inverted so up = better · |value|>200% clipped and labelled)",
                  fontsize=13, fontweight="bold")
     fig.tight_layout()
     fig.savefig(FIG / "all_metrics.png"); plt.close(fig)
 
 
-SUMMARY = ROOT / "data" / "summary"
-RUNS_DIR = ROOT / "data" / "runs"
+SUMMARY = ROOT / "data" / "clean" / "summary"
+RUNS_DIR = ROOT / "data" / "clean" / "runs"
 RESULTS = ROOT / "results"
 
 
 # ── Figure: run-to-run reproducibility (each of the 4 runs as a dot) ───────────
+def _repro_without_edges():
+    """{'runtime'|'energy': [per-run mean-over-workloads]} for ramp.c trimmed.
+
+    matrix.csv only carries the untrimmed cost, so this recomputes the trimmed
+    series from the traces via analysis/cost_edges.py. Returns {} if that
+    module or its inputs are missing, so the figure degrades to 3 slots.
+    """
+    try:
+        sys.path.insert(0, str(ROOT / "analysis"))
+        import cost_edges
+        cells = cost_edges.per_cell()
+    except Exception:
+        return {}
+    out = {}
+    for key in ("runtime", "energy"):
+        out[key] = [statistics.mean(
+            [cells[(r, w, "rampc")][f"{key}_without_pct"] for w in WORKLOADS])
+            for r in cost_edges.RUNS]
+    return out
+
+
 def fig_reproducibility():
     """Each dot is one collection's mean-over-workloads; the bar is mean ± SD.
     Shows CV is tight (robust) while runtime/energy carry the spread."""
     rows = list(csv.DictReader(open(SUMMARY / "matrix.csv")))
     metrics = [("cv_pct", "CV (flatness)"), ("runtime_pct", "runtime"),
                ("energy_pct", "energy")]
+    # ramp.c's workload-window cost gets its own slot on the two cost panels,
+    # so the reader can see the trimmed series is both lower AND much tighter
+    # run-to-run than the untrimmed one. Open markers = workload window only.
+    extra = _repro_without_edges()
     fig, axes = plt.subplots(1, 3, figsize=(13, 4.5))
     for ax, (col, title) in zip(axes, metrics):
-        for i, m in enumerate(MITIG):
+        cats, series = [], []
+        key = col.replace("_pct", "")
+        for m in MITIG:
             byrun = {}
             for r in rows:
-                if (r.get("smoother") or r["mitigation"]) == m:
+                if r["smoother"] == m:
                     byrun.setdefault(r["run"], []).append(float(r[col]))
-            vals = [statistics.mean(byrun[k]) for k in sorted(byrun)]
+            cats.append(m)
+            series.append((m, [statistics.mean(byrun[k]) for k in sorted(byrun)],
+                           True))
+            # sits immediately beside ramp.c, not at the far end, so the pair
+            # reads as one arm measured two ways rather than a fourth arm
+            if m == "rampc" and extra.get(key):
+                cats.append("rampc_wo")
+                series.append(("rampc", extra[key], False))
+        for i, (m, vals, filled) in enumerate(series):
             xs = [i + (j - (len(vals) - 1) / 2) * 0.07 for j in range(len(vals))]
-            ax.scatter(xs, vals, color=C[m], s=48, zorder=3,
-                       edgecolor="black", linewidth=0.4)
+            ax.scatter(xs, vals, s=48, zorder=3,
+                       facecolors=C[m] if filled else "white",
+                       edgecolors="black" if filled else C[m],
+                       linewidths=0.4 if filled else 1.6)
             mean, sd = statistics.mean(vals), statistics.pstdev(vals)
             ax.errorbar(i, mean, yerr=sd, fmt="_", color="black",
                         capsize=7, markersize=22, elinewidth=1.4, zorder=2)
         ax.axhline(0, color="black", lw=0.8)
-        ax.set_xticks(range(len(MITIG)))
-        ax.set_xticklabels(["ramp.c", "smoother", "gov"], rotation=20, ha="right")
+        ax.set_xticks(range(len(cats)))
+        ax.set_xticklabels([("ramp.c\n(workload)" if c == "rampc_wo" else SHORT[c])
+                            for c in cats], rotation=20, ha="right")
         ax.set_title(title, fontweight="bold"); ax.set_ylabel("% vs baseline")
     fig.suptitle("Run-to-run reproducibility (n=4): each dot is one collection · "
                  "CV is tight, cost is the noisy dimension",
@@ -353,12 +476,12 @@ def fig_pcc(run="1"):
     fig.tight_layout(); fig.savefig(FIG / "pcc_timeseries.png"); plt.close(fig)
 
 
-
 if __name__ == "__main__":
     FIG.mkdir(exist_ok=True)
     sb, mat = read_scoreboard(), read_matrix()
-    fig_scoreboard(sb)
-    fig_per_workload(mat)
+    fig_scoreboard(sb, read_cost_edges())
+    # per_workload.png deleted 2026-07-28; fig_per_workload() kept but not
+    # called, so regenerating figures does not resurrect the file.
     fig_overlays()
     fig_pipeline()
     fig_all_metrics()

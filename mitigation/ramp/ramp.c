@@ -14,7 +14,9 @@
 #include <fcntl.h>
 #include <errno.h>
 
-#define MAX_CORES           64
+/* 128 = mycroft's full thread count (dual-socket, 64 physical + HT siblings).
+ * Was 64, which silently truncated any list covering the virtual cores. */
+#define MAX_CORES           128
 #define CYCLE_US            10000       /* worker busy/sleep cycle (10 ms) */
 #define SAMPLE_INTERVAL_US  100000      /* /proc/stat polling interval (100 ms) */
 #define AT_FULL_THRESHOLD   95.0        /* % to consider a core fully loaded */
@@ -251,14 +253,47 @@ static int run_command(char **cmd, int *cores, int ncore)
 
 /* ---- core list parser ---- */
 
+/* Accepts comma lists ("0,2,4"), ranges ("0:123", "0-123"), and any mix
+ * ("0:63,96,100-103"). Ranges matter: atoi("0:123") is 0, so the old
+ * comma-only parser turned a 124-core range into the single core 0 without
+ * complaining -- and run_command() then pinned the whole workload to it. */
 static int parse_cores(const char *str, int *out, int max)
 {
     char *buf = strdup(str);
+    if (!buf) return -1;
     int n = 0;
-    for (char *p = strtok(buf, ","); p && n < max; p = strtok(NULL, ","))
-        out[n++] = atoi(p);
+    for (char *p = strtok(buf, ","); p && n < max; p = strtok(NULL, ",")) {
+        char *sep = strpbrk(p, ":-");
+        if (sep) {
+            *sep = '\0';
+            int lo = atoi(p), hi = atoi(sep + 1);
+            if (hi < lo) { int t = lo; lo = hi; hi = t; }
+            for (int c = lo; c <= hi && n < max; c++)
+                out[n++] = c;
+        } else {
+            out[n++] = atoi(p);
+        }
+    }
     free(buf);
     return n;
+}
+
+/* Selfcheck: ./ramp --selfcheck-cores  (no root, no threads, no workload) */
+static int selfcheck_cores(void)
+{
+    int c[MAX_CORES], n, fail = 0;
+    n = parse_cores("0:123", c, MAX_CORES);
+    if (n != 124 || c[0] != 0 || c[123] != 123) { fail++; fprintf(stderr, "FAIL 0:123 -> n=%d\n", n); }
+    n = parse_cores("0-3", c, MAX_CORES);
+    if (n != 4 || c[3] != 3) { fail++; fprintf(stderr, "FAIL 0-3 -> n=%d\n", n); }
+    n = parse_cores("0,2,4", c, MAX_CORES);
+    if (n != 3 || c[1] != 2) { fail++; fprintf(stderr, "FAIL 0,2,4 -> n=%d\n", n); }
+    n = parse_cores("0:1,10,20-21", c, MAX_CORES);
+    if (n != 5 || c[2] != 10 || c[4] != 21) { fail++; fprintf(stderr, "FAIL mixed -> n=%d\n", n); }
+    n = parse_cores("0:999", c, MAX_CORES);
+    if (n != MAX_CORES) { fail++; fprintf(stderr, "FAIL clamp -> n=%d\n", n); }
+    fprintf(stderr, fail ? "selfcheck_cores: %d FAILED\n" : "selfcheck_cores: OK\n", fail);
+    return fail;
 }
 
 /* ---- risk flag watcher ---- */
@@ -427,9 +462,12 @@ static int selfcheck(void)
     int usage_low = !usage_edge_fired(2.0, 4.0, 0.1, 10.0, USAGE_EDGE_RISE_PS);
     int usage_cross = usage_edge_fired(2.0, 12.0, 0.1, 10.0, USAGE_EDGE_RISE_PS);
     int usage_steady = !usage_edge_fired(20.0, 21.0, 0.1, 10.0, USAGE_EDGE_RISE_PS);
+    int cores_ok = (selfcheck_cores() == 0);
     if (edge == 1 && WIFEXITED(status) && WEXITSTATUS(status) == 0
-            && missing_fails_open && usage_low && usage_cross && usage_steady) {
-        printf("selfcheck OK: risk-file 0->1 edge, stale/missing fail-open, usage edge\n");
+            && missing_fails_open && usage_low && usage_cross && usage_steady
+            && cores_ok) {
+        printf("selfcheck OK: risk-file 0->1 edge, stale/missing fail-open, "
+               "usage edge, core-list parsing\n");
         return 0;
     }
     fprintf(stderr, "selfcheck FAILED: edge=%d child_status=%d fail_open=%d "

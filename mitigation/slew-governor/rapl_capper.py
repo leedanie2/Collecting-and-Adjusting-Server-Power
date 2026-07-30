@@ -734,7 +734,7 @@ class SlewGovernor:
                  ballast_w_per_core=BALLAST_W_PER_CORE, contact_w=CONTACT_W,
                  engage_deriv=ENGAGE_DERIV_W_S, shape_s=SLEW_SHAPE_S,
                  slew_min=SLEW_MIN_W_S, risk_file=None,
-                 flag_max_age=MAX_FLAG_AGE_S):
+                 flag_max_age=MAX_FLAG_AGE_S, drop_risk_file=None):
         self.capper = capper
         self.meter = meter
         self.n_zones = n_zones
@@ -751,6 +751,7 @@ class SlewGovernor:
         self.shape_s = shape_s
         self.slew_min = slew_min
         self.risk_file = risk_file
+        self.drop_risk_file = drop_risk_file
         self.flag_max_age = flag_max_age
         self.engaged = False
         self._stable_since = None
@@ -759,7 +760,9 @@ class SlewGovernor:
         self.preburn = ballast is not None   # risk pre-burn needs a pool
         self._preburn_set = 0.0          # cores burning on detector lead
         self._preburn_t0 = None          # current episode start (None = armed)
+        self._preburn_dir = 1            # +1 = pre-burn ahead of a rise, -1 ahead of a drop
         self._risk_prev = False
+        self._flag_prev = False          # raw detector flag, for edge-triggering episodes
         self._idle_since = None          # long-idle suppressor for false risk edges
         self._pressed_since = None       # start of current cap-contact stretch
         self.ballast_achieved_fn = None  # replay injects; live uses the pool
@@ -851,6 +854,27 @@ class SlewGovernor:
         except (OSError, ValueError):
             return False
         return bool(lines) and lines[-1] == "1"
+
+    def _drop_risk_high(self):
+        """Same level-read as _risk_high, on the FALLING-edge flag written by
+        usage_edge --drop-risk-file. Stale/missing = fail-open."""
+        if not self.drop_risk_file:
+            return False
+        try:
+            if time.time() - os.stat(self.drop_risk_file).st_mtime > self.flag_max_age:
+                return False
+            lines = [ln.strip() for ln in read_raw(self.drop_risk_file).splitlines()
+                     if ln.strip()]
+        except (OSError, ValueError):
+            return False
+        return bool(lines) and lines[-1] == "1"
+
+    def _drop_armed(self, p):
+        """Mirror of _risk_armed. A predicted DROP is only actionable while
+        power is still UP -- ballast has to already be burning when the load
+        falls away, or there is nothing to fill the hole with. So the level
+        gate is inverted relative to the up-swing case."""
+        return self._drop_risk_high() and p >= RISK_ENGAGE_FRAC * self.top_w
 
     def _risk_armed(self, p):
         """Risk arms the hug only where a cap can help: below the busy
@@ -958,6 +982,10 @@ class SlewGovernor:
         risk_raw = self._risk_armed(self._workload_w)
         preburn_ok = self._preburn_allowed(now, self._workload_w, deriv, d1)
         risk = risk_raw and (not self.preburn or preburn_ok)
+        # Drop risk drives ballast ONLY. It deliberately never reaches the
+        # ceiling logic below: a cap cannot mitigate a dip, and hugging on a
+        # predicted fall would clamp the plateau we still want running.
+        drop_risk = self._drop_armed(p)
         if not self.engaged:
             # the pre-burn ballast ramp itself runs at ~slew_up (75 W/s),
             # within lsq noise of ENGAGE_DERIV (80) -- don't self-engage on it
@@ -1038,14 +1066,31 @@ class SlewGovernor:
                                   "power_w": round(p, 1)})
 
         if self.preburn:
-            if risk and not self._risk_prev and self._preburn_t0 is None:
+            any_risk = risk or drop_risk
+            # Edge-trigger on the raw DETECTOR FLAG, not on the level-gated
+            # composite. Power hovering near RISK_ENGAGE_FRAC*top_w makes the
+            # gate flicker, and taking the edge off it manufactured a "fresh"
+            # episode every few ticks -- pilot 2026-07-27: 61 episodes for 17
+            # real detector edges, each restarting the PREBURN_MAX_S window so
+            # ballast burned continuously instead of in bounded episodes. The
+            # gate still decides whether to burn; it no longer invents edges.
+            raw_flag = self._risk_high() or self._drop_risk_high()
+            if (raw_flag and not self._flag_prev and any_risk
+                    and self._preburn_t0 is None):
                 self._preburn_t0 = now       # fresh flag edge starts an episode
-                self.capper._log({"event": "preburn", "power_w": round(p, 1)})
-            self._risk_prev = risk
-            burn = (risk and self._preburn_t0 is not None
+                self._preburn_dir = 1 if risk else -1
+                self.capper._log({"event": "preburn", "power_w": round(p, 1),
+                                  "dir": self._preburn_dir})
+            self._flag_prev = raw_flag
+            self._risk_prev = any_risk
+            burn = (any_risk and self._preburn_t0 is not None
                     and now - self._preburn_t0 <= PREBURN_MAX_S)
             tgt = float(self.ballast_cores_n) if burn else 0.0
-            if self._workload_w >= RISK_ENGAGE_FRAC * self.top_w:
+            # The instant-park branch is an UP-episode rule: it exists because
+            # real work preempting the spinners makes parking free. On a DOWN
+            # episode the plateau is exactly when the fill must stay burning,
+            # so parking there would defeat the whole point.
+            if self._preburn_dir > 0 and self._workload_w >= RISK_ENGAGE_FRAC * self.top_w:
                 # the onset arrived: real work preempted the spinners, so
                 # parking makes no power edge -- but leaving them RUNNABLE
                 # steals scheduler/cache time from the work that swapped in
@@ -1917,6 +1962,26 @@ def selfcheck():
         check("risk arms the hug only below the plateau (RISK_ENGAGE_FRAC): "
               "a busy-regime flag must not hold the hug at full power",
               gov18._risk_armed(60.0) and not gov18._risk_armed(200.0))
+
+        # Drop risk is the mirror: armed only NEAR the plateau, because ballast
+        # has to already be burning when the load falls away. Inverted gate,
+        # and it must never reach the ceiling path.
+        drop18 = tmp / "drop18.flag"
+        drop18.write_text("1\n")
+        gov18.drop_risk_file = str(drop18)
+        check("drop risk arms only AT the plateau (mirror of RISK_ENGAGE_FRAC)",
+              gov18._drop_armed(200.0) and not gov18._drop_armed(60.0))
+        drop18.write_text("0\n")
+        check("drop flag low disarms", not gov18._drop_armed(200.0))
+        stale18 = tmp / "stale18.flag"
+        stale18.write_text("1\n")
+        os.utime(stale18, (time.time() - 3600, time.time() - 3600))
+        gov18.drop_risk_file = str(stale18)
+        check("stale drop flag fails open (>flag_max_age = no signal)",
+              not gov18._drop_armed(200.0))
+        gov18.drop_risk_file = None
+        check("no drop-risk file = feature off, never armed",
+              not gov18._drop_armed(200.0))
         cap18.exit_restore()
 
         # 10. dry-run writes nothing
@@ -2008,6 +2073,11 @@ def main():
                     help="--slew: pre-engage the hug while this detector flag reads "
                          "fresh '1' (risky swing incoming); 'none' disables "
                          f"(default {DEFAULT_FLAG})")
+    ap.add_argument("--drop-risk-file", default=None,
+                    help="--slew: pre-burn ballast while this FALLING-edge flag "
+                         "reads fresh '1' (usage_edge --drop-risk-file), so the "
+                         "fill is already running when the load falls away. "
+                         "Unset = react to drops only after they land.")
     ap.add_argument("--ballast", action="store_true",
                     help="--slew: fill abrupt power DROPS with decaying SCHED_IDLE "
                          "spinner processes (a cap cannot stop power falling)")
@@ -2047,13 +2117,15 @@ def main():
                            poll_s=min(args.poll_s, GOV_POLL_S),
                            ballast=pool, ballast_w_per_core=args.ballast_w_per_core,
                            shape_s=args.slew_shape, slew_min=args.slew_min,
-                           risk_file=risk_file, flag_max_age=args.flag_max_age)
+                           risk_file=risk_file, flag_max_age=args.flag_max_age,
+                           drop_risk_file=args.drop_risk_file)
         gov.engage_on_dips = not args.no_engage_on_dips
         print(f"[{now_iso()}] slew governor: top={gov.top_w:.0f}W "
               f"max up/down={args.slew_up}/{args.slew_down}W/s "
               f"dyn slope=gap/{args.slew_shape}s floor {args.slew_min}W/s "
               f"headroom={args.headroom_w}W ballast={'on' if pool else 'off'} "
-              f"risk_file={risk_file or 'off'}", flush=True)
+              f"risk_file={risk_file or 'off'} "
+              f"drop_risk_file={args.drop_risk_file or 'off'}", flush=True)
         _install_signals()
         atexit.register(capper.exit_restore)
         try:

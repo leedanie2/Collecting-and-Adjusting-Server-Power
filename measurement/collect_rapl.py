@@ -92,8 +92,36 @@ def main():
         t_prev = time.monotonic()
         time.sleep(INTERVAL)
         while True:
-            t1 = time.monotonic()
+            # Read the counters, then stamp. Marginally tighter than stamping
+            # first, but it does not change any measurement.
+            #
+            # RESOLVED 2026-07-28. aisim2 traces carry ~60 isolated single-sample
+            # dips near 100 W, and 10 samples across the set exceed even PL2
+            # (492 W), peaking at 553 W. Both are the SAME artifact seen from
+            # opposite ends: the energy counter does not advance on every read,
+            # so one interval under-reports and the next dumps the accumulated
+            # energy. Evidence:
+            #   * every >PL2 spike is preceded by an unusually low sample, and
+            #     (spike+prev)/2 lands back on the local level (median 1.02);
+            #   * averaging adjacent samples removes ALL 52 dips in
+            #     run1/aisim2_baseline (min 100.8 W -> 150.4 W);
+            #   * dt is a clean 0.100 s at every dip -- the timing is fine, it
+            #     is the ENERGY that is misattributed between neighbours.
+            # The earlier "cannot be real, bare idle is 198.5 W" reasoning was
+            # right that the samples are not physical, and the earlier guess
+            # that they were C-state excursions was wrong.
+            #
+            # Impact on results: negligible. The artifact lives at 0.1 s and
+            # every grid metric is computed after the 15 s UPS low-pass, which
+            # removes it -- UPS-filtered CV moves 0.1223 -> 0.1214 and trace
+            # energy by 0.06%. Do NOT despike the committed traces for that
+            # 0.7%: it would change the instrument mid-study for no gain.
+            #
+            # For FUTURE collections, rapl.odt describes the correct fix (emit
+            # only when the counter advanced, dividing by time since the last
+            # advance). It is documented there but NOT implemented below.
             e1 = [ruj(p) for p in paths]
+            t1 = time.monotonic()
             dt = t1 - t_prev
             de = sum_deltas(e0, e1, max_ranges)
             print(f'{t1 - t0:.3f},{de / 1e6 / dt:.3f}', flush=True)
