@@ -2,7 +2,7 @@
 """Plot one baseline-vs-smoother pair of raw single-node power-vs-time traces.
 Usage: python3 analysis/plot_traces.py aisim2_baseline.csv aisim2_powersmoother.csv
        python3 analysis/plot_traces.py hpl_baseline.csv hpl_rampc.csv --offset 86.7
-Reads from data/<set>/traces/, writes data/<set>/plots/<smoother-stem>.png (e.g.
+Reads from data/traces/, writes data/plots/<smoother-stem>.png (e.g.
 hpl_rampc.csv -> hpl_rampc.png), so the plot filename always matches the
 smoother trace's own workload_smoother name.
 
@@ -24,18 +24,17 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 
 def find_trace(name):
-    """traces live under data/<set>/traces/, set = original | clean (see data/README.md).
+    """Traces live in data/traces/.
     Accept a bare filename and search one level down so callers don't need to
     know which set a trace belongs to; an explicit relative path still wins."""
     base = ROOT / "data"
     direct = base / name
     if direct.is_file():
         return direct
-    # data/<set>/traces/[raw/]<name>, set = original | clean
-    hits = (sorted(base.glob(f"*/traces/{name}"))
-            + sorted(base.glob(f"*/traces/*/{name}")))
+    hits = (sorted(base.glob(f"traces/{name}"))
+            + sorted(base.glob(f"traces/*/{name}")))
     if not hits:
-        raise SystemExit(f"trace not found under data/*/traces/: {name}")
+        raise SystemExit(f"trace not found under data/traces/: {name}")
     return hits[0]
 
 

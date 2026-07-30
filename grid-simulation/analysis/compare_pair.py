@@ -17,9 +17,9 @@ Usage:
     python3 analysis/compare_pair.py aiload_baseline aiload_gov
     python3 analysis/compare_pair.py <base> <smoother> --suffix _worst
 
-Run from the grid/ root. Reads traces from data/<set>/traces/, writes
-data/<set>/comparisons/<prefix>_comparison.csv (set = original | clean,
-prefix = shared prefix of the two run names, e.g. aisim2clean_rampc).
+Run from the grid/ root. Reads traces from data/traces/, writes
+data/comparisons/<prefix>_comparison.csv (prefix = shared prefix of the two
+run names, e.g. hpl_rampc).
 """
 import os, sys, csv, json, argparse
 from pathlib import Path
@@ -28,18 +28,16 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 def find_trace(name):
-    """traces live under data/<set>/traces/, set = original | clean (see data/README.md).
-    Accept a bare filename and search one level down; an explicit relative path
-    still wins."""
+    """Traces live in data/traces/. Accept a bare filename; an explicit relative
+    path still wins."""
     base = ROOT / "data"
     direct = base / name
     if direct.is_file():
         return direct
-    # data/<set>/traces/[raw/]<name>, set = original | clean
-    hits = (sorted(base.glob(f"*/traces/{name}"))
-            + sorted(base.glob(f"*/traces/*/{name}")))
+    hits = (sorted(base.glob(f"traces/{name}"))
+            + sorted(base.glob(f"traces/*/{name}")))
     if not hits:
-        raise SystemExit(f"trace not found under data/*/traces/: {name}")
+        raise SystemExit(f"trace not found under data/traces/: {name}")
     return hits[0]
 
 # 9 risk stats: (label, metrics.json section, key). ratio = smoother / baseline;
@@ -73,9 +71,9 @@ def energy_j(csv_path):
 def gflops_for(run):
     """Sustained Gflops for a run, from data/sweep_meta.csv if present.
 
-    Not captured for the clean set -- recollect.sh sends the workload's stdout
-    (where HPL prints its score) to the terminal rather than a file, so there is
-    no Gflops row for those runs. Returns None and the caller degrades.
+    Not captured for every collection -- where the workload's stdout (which is
+    where HPL prints its score) went to the terminal rather than a file, there
+    is no Gflops row. Returns None and the caller degrades.
     """
     p = ROOT / "data" / "sweep_meta.csv"
     if not p.exists():
@@ -179,7 +177,6 @@ def main():
 
     # ── CSV ─────────────────────────────────────────────────────────────────────
     prefix = args.out or os.path.commonprefix([args.baseline, args.smoother]).rstrip("_") or "pair"
-    # Mirror the traces split so clean-set results never mix with the original
     # contaminated set in the same directory listing.
     outdir = ROOT / "data" / "comparisons"
     outdir.mkdir(parents=True, exist_ok=True)

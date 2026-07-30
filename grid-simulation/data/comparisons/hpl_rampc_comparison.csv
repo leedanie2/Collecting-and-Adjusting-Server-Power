@@ -1,5 +1,6 @@
 metric,baseline,smoother,pct_change_smoother_vs_baseline
 cost_energy_kJ,45.69,48.24,5.6
+runtime_s,119.9,120.3,0.3
 RREI (exceedances/yr),263199.3,262324.2,-0.3
 NRS (MW/yr),609409.258,972855.942,59.6
 LOLE proxy (days/yr),18.0448,18.1483,0.6
