@@ -1,0 +1,23 @@
+# Step workload used for the benchmark runs.
+#
+#   ./load 128 step.waveform
+#
+# One instruction per line: <time_ms>, <percent_usage>. Worker threads hold each
+# utilization level for the given duration, in order, alternating arithmetic and
+# sleep within a 4 ms duty-cycle window.
+#
+# 110 s total. The point is to exercise transitions the other two workloads do
+# not: partial levels as well as full, both directions, and steps of three
+# different sizes (50, 100, and the 50-point moves between them), rather than
+# only the idle-to-peak cliff that HPL and the AI simulation produce.
+#
+# time_ms, percent
+ 15000, 50
+ 10000, 0
+ 15000, 100
+ 10000, 50
+ 10000, 0
+ 15000, 50
+ 15000, 100
+ 10000, 50
+ 10000, 0
