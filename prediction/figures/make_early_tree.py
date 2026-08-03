@@ -7,21 +7,25 @@ feature_frame(kf=True, upstream=False), the same base+KF feature set CP3 used,
 then render the top 3 levels of one tree. This is a schematic, not the shipped
 model, so a small forest on a cache slice is fine.
 
-  .venv/bin/python make_early_tree.py         # tree 0
-  .venv/bin/python make_early_tree.py 5        # pick another estimator
+Run from prediction/ (it needs core/ on the path):
 
-Writes /home/daniellee/rf_tree_early.png and prints it as text.
+  .venv/bin/python figures/make_early_tree.py         # tree 0
+  .venv/bin/python figures/make_early_tree.py 5       # pick another estimator
+
+Writes rf_tree_early.png next to this script and prints it as text.
 """
+import os
 import sys
 
 import matplotlib
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-import numpy as np
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.tree import export_text, plot_tree
+from sklearn.tree import export_text
 
 import core.features as features
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import tree_style
 
 DEPTH = 3
 which = int(sys.argv[1]) if len(sys.argv) > 1 else 0
@@ -46,22 +50,8 @@ for v, c in sorted(zip(rf.feature_importances_, X.columns), reverse=True)[:8]:
 print()
 print(export_text(est, feature_names=list(X.columns), max_depth=DEPTH))
 
-fig, ax = plt.subplots(figsize=(20, 9))
-annots = plot_tree(
-    est, max_depth=DEPTH, feature_names=list(X.columns),
-    class_names=["no spike", "spike"], filled=True, rounded=True,
-    impurity=False, proportion=True, fontsize=11, ax=ax,
-)
-# Drop the reweighted samples/value lines: with balanced weights they read as
-# "spikes are the majority", the opposite of the rare-event framing.
-for a in annots:
-    kept = [ln for ln in a.get_text().splitlines()
-            if not ln.strip().startswith(("samples", "value"))]
-    a.set_text("\n".join(kept))
-
-ax.set_title(f"Early random-forest spike detector (power + KF features): "
-             f"top {DEPTH} levels of one of {rf.n_estimators} trees", fontsize=13)
-fig.tight_layout()
-out = "/home/daniellee/rf_tree_early.png"
-fig.savefig(out, dpi=150, bbox_inches="tight")
+# No title: this is a captioned figure in the paper, and a second title on the
+# image just eats vertical space.
+out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "rf_tree_early.png")
+tree_style.render(est, X.columns, out, depth=DEPTH)
 print(f"wrote {out}")

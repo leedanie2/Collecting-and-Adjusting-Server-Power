@@ -205,7 +205,9 @@ def fig_overlays(run="run1"):
     workloads line up for direct shape comparison."""
     rd = ROOT / "data" / "runs" / run
     for m in MITIG:
-        fig, axes = plt.subplots(3, 1, figsize=(9, 9), sharex=False)
+        # Landscape, not the old 9x9 square: dropped into a paper's text column
+        # a square is most of a page and the tick labels land around 4pt.
+        fig, axes = plt.subplots(3, 1, figsize=(10, 5.6), sharex=False)
         for r, w in enumerate(WORKLOADS):
             ax = axes[r]
             bt, bp = _series(rd / f"{w}_baseline.csv")
@@ -220,20 +222,20 @@ def fig_overlays(run="run1"):
                 ax.axvspan(0, b - a, color=C[m], alpha=0.07)
                 ax.axvline(0, color=C[m], ls="--", lw=0.8, alpha=0.6)
                 ax.axvline(b - a, color=C[m], ls="--", lw=0.8, alpha=0.6)
-                ax.text((b - a) / 2, ax.get_ylim()[1] * 0.99,
+                lo, hi = ax.get_ylim()
+                ax.set_ylim(lo, hi + 0.16 * (hi - lo))  # headroom for the label
+                ax.text((b - a) / 2, ax.get_ylim()[1],
                         "scored plateau (aligned to baseline)", ha="center",
-                        va="top", fontsize=8, color=C[m])
-                ax.text(-a / 2 if a else -1, ax.get_ylim()[0] * 1.02, "ramp-up",
-                        ha="center", va="bottom", fontsize=7, color=C[m], alpha=0.8)
+                        va="top", fontsize=11, color=C[m])
             else:
                 ax.plot(mt, mp, color=C[m], lw=1.1, label=LABEL[m])
-            ax.set_ylabel(f"{w}\npower (W)", fontweight="bold")
-            ax.legend(fontsize=9, loc="lower right", framealpha=0.85)
+            ax.set_ylabel(f"{w}\npower (W)", fontweight="bold", fontsize=14)
+            ax.tick_params(labelsize=12)
+            ax.legend(fontsize=12, loc="lower right", framealpha=0.85)
             if r == 2:
-                ax.set_xlabel("time (s)")
-        note = ("  (untrimmed, plateau aligned to baseline)" if m == "rampc" else "")
-        fig.suptitle(f"Single-node power: baseline vs {LABEL[m]}{note}",
-                     fontsize=13, fontweight="bold", y=0.997)
+                ax.set_xlabel("time (s)", fontsize=14)
+        # No suptitle: these are figures in the paper, where the caption carries
+        # the title and a second one just eats vertical space.
         fig.tight_layout()
         fig.savefig(FIG / f"overlay_{m}.png"); plt.close(fig)
 
