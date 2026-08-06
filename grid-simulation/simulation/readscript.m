@@ -41,7 +41,11 @@ end
 dt_mean = mean(diff(t));
 
 %% 2. Parameters ---------------------------------------------------------------
-N_servers       = 10000;
+if exist('N_OVERRIDE', 'var') && ~isempty(N_OVERRIDE)
+    N_servers   = N_OVERRIDE;   % fleet-size sweep (run_simulation 2nd arg)
+else
+    N_servers   = 10000;
+end
 P_base_hardware = 300;     % W/server — non-CPU draw
 
 PUE_idle = 1.60;

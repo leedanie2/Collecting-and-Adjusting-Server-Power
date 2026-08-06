@@ -25,8 +25,8 @@ NRS/ROCOF/nadir/sag-depth are dominated by the model's t=0 fleet cold start.
 CV/peak are read from the simulated PCC power, NOT the raw trace, because the
 15 s UPS low-pass is exactly what separates the mitigations.
 
-    python3 analysis/summarize_n3.py            # -> data/summary/{scoreboard,matrix,summary}
-    python3 analysis/summarize_n3.py --selfcheck
+    python3 analysis/summarize_n4.py            # -> data/summary/{scoreboard,matrix,summary}
+    python3 analysis/summarize_n4.py --selfcheck
 """
 import argparse, csv, json, statistics, sys
 from pathlib import Path

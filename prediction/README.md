@@ -86,14 +86,15 @@ Install with `pip install -r requirements.txt`, and run modules from this
 directory as a package root:
 
 ```bash
-python -m core.features --selfcheck
+python -m core.onsets --selfcheck
 python -m detectors.random_forest.test_scorer
 python -m models.kalman.kalman_filter --selfcheck
 ```
 
-Most modules take `--selfcheck`. The ones that exercise only logic
-(`core.onsets`, `models.kalman.kalman_filter`, `validation.evaluation`, the
-scorer test) pass from a clean clone.
+Most modules take `--selfcheck`. Six exercise only logic and pass from a clean
+clone — `core.onsets`, `models.kalman.kalman_filter`,
+`detectors.random_forest.evaluator`, `exploration.characterize_overshoot`,
+`exploration.confirmation_backtest`, and the scorer test.
 
 The ones that score against real data need the telemetry caches, which are not
 committed — they are hundreds of megabytes and regenerate from InfluxDB:

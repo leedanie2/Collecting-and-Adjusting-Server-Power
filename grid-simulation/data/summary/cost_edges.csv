@@ -1,0 +1,4 @@
+smoother,runtime_with_pct,runtime_with_pct_sd,runtime_without_pct,runtime_without_pct_sd,energy_with_pct,energy_with_pct_sd,energy_without_pct,energy_without_pct_sd
+rampc,121.1,5.7,6.8,1.0,161.0,6.7,37.6,1.4
+powersmoother,3.5,0.2,,,7.4,0.6,,
+usagegov,1.1,1.9,,,11.6,1.5,,

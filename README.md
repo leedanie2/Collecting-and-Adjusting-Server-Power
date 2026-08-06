@@ -33,7 +33,7 @@ expensive one:
 |---|---|---|---|
 | **di/dt ramp shaping** | **−68.8 ± 0.9%** | +121 ± 6% | +161 ± 7% |
 | standalone smoother | +0.6 ± 1.9% | +3.5 ± 0.2% | +7.4 ± 0.6% |
-| slew governor | +16.0 ± 4.9% | +1.1 ± 1.8% | +11.6 ± 0.7% |
+| slew governor | +15.4 ± 7.6% | +1.1 ± 1.9% | +11.6 ± 1.5% |
 
 Mean ± SD across the four runs, on simulated PCC power. The two cheap
 mitigations are cheap because they are reactive: both wait for a transition to
@@ -48,11 +48,20 @@ figure. Simulation outputs are checked in, so no MATLAB is needed:
 
 ```bash
 cd grid-simulation
-python3 analysis/summarize_n3.py         # the n=4 scoreboard
+python3 analysis/summarize_n4.py         # the n=4 scoreboard
 python3 analysis/rank_all.py             # all thirteen metrics
+python3 analysis/cost_edges.py           # ramp.c's cost split: ballast legs vs workload
+python3 analysis/summarize_sweep.py      # the same matrix at 1k/5k/10k/20k servers
 python3 analysis/score_detector.py       # detection quality
 python3 figures/make_figures.py          # every figure
+python3 figures/make_experiment_figs.py  # the workload / profile / schematic figures
+python3 analysis/paper_data.py           # PAPER_DATA.md — every published number, sourced
 ```
+
+`grid-simulation/PAPER_DATA.md` is the sheet to read alongside the paper: each
+number in it is derived from a checked-in CSV or `metrics.json` and cites the
+file it came from. Several of the analysis scripts take `--selfcheck`, which
+re-derives a published table and asserts it matches the committed one.
 
 **MATLAB R2025a + Simscape Electrical** — regenerating the simulation outputs
 from raw traces. The model uses `powerlib`, removed in R2026a, so the version is
@@ -62,8 +71,11 @@ pinned.
 and `mitigation/`. These need root for RAPL, a live InfluxDB, a BMC and a
 networked PDU, and a 128-thread dual-socket host with per-socket RAPL
 (PL1 205 W, PL2 246 W). They are included as the method of record. Most modules
-still offer a `--selfcheck` that exercises their logic against synthetic input
-and runs anywhere.
+still offer a `--selfcheck` that exercises their logic against synthetic input.
+Everything under `measurement/`, `mitigation/` and `grid-simulation/` passes it
+from a clean clone; under `prediction/` only the six listed in
+`prediction/README.md` do, because the rest score against the telemetry caches
+that are too large to commit.
 
 ## Reading the repo against the paper
 

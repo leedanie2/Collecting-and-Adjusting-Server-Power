@@ -1,10 +1,19 @@
-function run_simulation(rapl_csv)
-% run_simulation('aisim2_baseline.csv')   % worst case (all N_servers in-phase)
+function run_simulation(rapl_csv, N_servers_override)
+% run_simulation('aisim2_baseline.csv')        % worst case, N=10000 (default)
+% run_simulation('aisim2_baseline.csv', 50000) % same trace, 50000-server fleet
 %
 % Worst-case aggregation is the only mode. Pass just the filename; the function
-% resolves it against data/traces/ automatically. Output -> results/<basename>_worst/.
+% resolves it against data/traces/ automatically. Output -> results/<basename>_worst/
+% (or <basename>_N<count>_worst when a fleet size is given).
+%
+% The fleet-size arg is exact-equivalent to scaling the trace by k=N/10000 with
+% a +300*(k-1) floor offset (worst-case aggregation is linear-affine); it just
+% avoids the offset arithmetic by threading N straight into readscript.m.
 
 if nargin < 1 || isempty(rapl_csv), rapl_csv = 'rapl_data.csv'; end
+if nargin >= 2 && ~isempty(N_servers_override)
+    N_OVERRIDE = N_servers_override;   %#ok<NASGU>  read by readscript.m
+end
 
 sim_dir  = fileparts(mfilename('fullpath'));
 root_dir = fileparts(sim_dir);
@@ -17,7 +26,11 @@ if ~isfile(rapl_csv)
 end
 
 [~, base, ~] = fileparts(rapl_csv);
-run_name = sprintf('%s_worst', base);
+if exist('N_OVERRIDE', 'var') && ~isempty(N_OVERRIDE)
+    run_name = sprintf('%s_N%d_worst', base, N_OVERRIDE);
+else
+    run_name = sprintf('%s_worst', base);
+end
 
 out_dir = fullfile(root_dir, 'results', run_name);
 if ~exist(out_dir, 'dir'), mkdir(out_dir); end

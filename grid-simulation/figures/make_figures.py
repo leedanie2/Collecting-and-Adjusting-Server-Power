@@ -30,9 +30,10 @@ from trim_auto import load as trim_load, detect_window  # noqa: E402
 
 WORKLOADS = ["hpl", "aisim2", "step"]
 MITIG = ["rampc", "powersmoother", "usagegov"]
-# Okabe-Ito colourblind-safe. baseline grey, one hue per mitigation.
-C = {"baseline": "#4d4d4d", "rampc": "#0072B2",
-     "powersmoother": "#E69F00", "usagegov": "#CC79A7"}
+# Okabe-Ito derived, saturated. Still colourblind-safe: the baseline navy
+# is dark enough to read against ramp.c blue at any line weight.
+C = {"baseline": "#1b3a5c", "rampc": "#0072B2",
+     "powersmoother": "#E8720C", "usagegov": "#B5178E"}
 LABEL = {"rampc": "ramp.c (di/dt shaping)", "powersmoother": "power smoother",
          "usagegov": "usage governor"}
 # tick labels: keep keyed to MITIG, never a positional literal
@@ -480,6 +481,7 @@ def fig_pcc(run="1"):
 
 if __name__ == "__main__":
     FIG.mkdir(exist_ok=True)
+    before = {p: p.stat().st_mtime for p in FIG.glob("*.png")}
     sb, mat = read_scoreboard(), read_matrix()
     fig_scoreboard(sb, read_cost_edges())
     # per_workload.png deleted 2026-07-28; fig_per_workload() kept but not
@@ -491,4 +493,9 @@ if __name__ == "__main__":
     fig_distribution()
     fig_tradeoff(sb)
     fig_pcc()
-    print("wrote:", ", ".join(p.name for p in sorted(FIG.glob("*.png"))))
+    # Only the files this run actually touched -- the rest of figures/ comes
+    # from make_experiment_figs.py, and listing the whole directory here used
+    # to claim credit for those too.
+    wrote = sorted(p.name for p in FIG.glob("*.png")
+                   if before.get(p) != p.stat().st_mtime)
+    print("wrote:", ", ".join(wrote))

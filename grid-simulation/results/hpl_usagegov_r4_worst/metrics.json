@@ -1,20 +1,20 @@
 {
   "power": {
-    "peak_MW": 8.1717,
-    "mean_MW": 7.9252,
-    "trace_energy_MJ": 1747.73
+    "peak_MW": 8.3936,
+    "mean_MW": 8.1197,
+    "trace_energy_MJ": 1789.008
   },
   "risk": {
-    "rrei_exceedances_per_year": 143118.4,
-    "nrs_MW_per_year": 337762.26,
-    "lole_proxy_days_per_year": 9.746,
+    "rrei_exceedances_per_year": 143248.3,
+    "nrs_MW_per_year": 347092.445,
+    "lole_proxy_days_per_year": 10.0198,
     "lole_target_days_per_year": 0.1,
-    "lole_ratio": 97.4605,
-    "cv": 0.0407,
-    "peak_to_mean": 1.0311,
+    "lole_ratio": 100.1977,
+    "cv": 0.0433,
+    "peak_to_mean": 1.0337,
     "n_exceedances_in_trace": 1,
     "ramp_limit_MW_s": 0.333,
-    "trace_duration_s": 220.5,
+    "trace_duration_s": 220.3,
     "warmup_s": 0.0
   },
   "thresholds": {
@@ -24,17 +24,17 @@
     "lole_source": "NERC 1-in-10-years resource adequacy standard"
   },
   "frequency": {
-    "freq_nadir_hz": 59.1614,
-    "freq_nadir_deviation_hz": -0.8386,
-    "rocof_max_hz_per_s": 0.48186,
-    "under_freq_events_per_year": 4293551.0,
+    "freq_nadir_hz": 59.1305,
+    "freq_nadir_deviation_hz": -0.8695,
+    "rocof_max_hz_per_s": 0.49676,
+    "under_freq_events_per_year": 4583945.5,
     "under_freq_limit_hz": 59.3
   },
   "voltage": {
-    "min_voltage_pu": 0.95169,
-    "voltage_sag_depth_pu": 0.04831,
+    "min_voltage_pu": 0.94845,
+    "voltage_sag_depth_pu": 0.05155,
     "voltage_sag_limit_pu": 0.95,
-    "voltage_sag_events_per_yr": 0.0,
-    "mean_voltage_pu": 0.96092
+    "voltage_sag_events_per_yr": 13465340.0,
+    "mean_voltage_pu": 0.95685
   }
 }

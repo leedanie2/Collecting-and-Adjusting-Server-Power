@@ -38,7 +38,7 @@ once ramped, and understate the mitigation). The CV bar is tight (±0.9%) even
 though raw per-cell runtimes swung 10–19% between runs — the grid metric is
 stable; wall-clock time is the noisy one, which is why four collections were taken.
 
-Regenerate with `python3 analysis/summarize_n3.py` (Python only — the per-run
+Regenerate with `python3 analysis/summarize_n4.py` (Python only — the per-run
 metrics are checked in).
 
 ## Layout
@@ -48,7 +48,7 @@ simulation/    MATLAB — fleet aggregation (readscript.m), model builder
                (build_microgrid.m), runner (run_simulation.m), and the phasor
                model (microgrid_phasor.slx)
 analysis/      Python scoring — grid_metrics.py (per-run metrics),
-               compare_pair.py (baseline vs smoother), summarize_n3.py (the
+               compare_pair.py (baseline vs smoother), summarize_n4.py (the
                n=4 scoreboard), rank_all.py (all thirteen metrics),
                score_detector.py (detection quality), plot_traces.py
 scripts/       quiesce.sh / recollect.sh (collect the matrix, see below),
@@ -124,12 +124,15 @@ The simulation outputs are checked in under `results/`, so the metrics and
 comparison tables regenerate with just Python and NumPy:
 
 ```bash
-python3 analysis/summarize_n3.py                           # the n=4 scoreboard
+python3 analysis/summarize_n4.py                           # the n=4 scoreboard
+python3 analysis/cost_edges.py                             # ramp.c cost, split at the ramps
+python3 analysis/summarize_sweep.py                        # 1k/5k/10k/20k fleet sizes
+python3 analysis/paper_data.py                             # PAPER_DATA.md, every number sourced
 scripts/score_all.sh                                       # re-score every run
 python3 analysis/compare_pair.py hpl_baseline hpl_rampc --out hpl_rampc
 ```
 
-`summarize_n3.py` reads the checked-in per-run metrics and writes
+`summarize_n4.py` reads the checked-in per-run metrics and writes
 `data/summary/` — the headline table above. `compare_pair.py` drills into one
 baseline-vs-mitigation pair, printing cost (energy-area ratio) and all thirteen
 metrics as baseline / smoother / percent change into
@@ -194,5 +197,5 @@ duration, that padding alone would deflate the risk scores, so each ramp.c trace
 is trimmed to its real-workload window (the high-power plateau) before scoring.
 `trim_auto.py` detects that window straight from the power trace (first and last
 crossing of a threshold just under the plateau, so a mid-workload dip survives)
-and is what `summarize_n3.py` and `nrun_pipeline.sh` use. `trim_rampc.py` is the
+and is what `summarize_n4.py` and `nrun_pipeline.sh` use. `trim_rampc.py` is the
 older tool that instead takes hand-supplied offsets read from ramp.c's tick log.
