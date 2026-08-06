@@ -10,7 +10,9 @@ shaping) smooth the draw; and the resulting fleet-scale load is pushed through a
 phasor microgrid model to score grid impact — ramp-rate exceedances, frequency
 nadir and ROCOF, and voltage sag — against NERC and IEEE thresholds.
 
-Paper: (link to be added)
+Paper: `Paper/draft.pdf` (2026 Future Computing Summer Internship, Laboratory
+for Physical Sciences). `grid-simulation/PAPER_DATA.md` maps its tables and
+figures back to the files each number came from.
 
 ## Layout
 

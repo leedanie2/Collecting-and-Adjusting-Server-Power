@@ -16,5 +16,3 @@ slprj/
 cluster-profiling/index.html
 .DS_Store
 
-# local agent/editor state
-.claude/
