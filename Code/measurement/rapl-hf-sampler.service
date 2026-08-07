@@ -1,0 +1,33 @@
+# rapl_hf_sampler — C replacement for influx2.py's 10 Hz RAPL half and
+# hf-edge-scorer.service. Single writer rule: when this unit is active,
+# influx2.service must run with --no-rapl and hf-edge-scorer.service must be
+# disabled (they write the same measurements).
+#
+# Install (as root on mycroft):
+#   cc -O2 -Wall -o /usr/local/bin/rapl_hf_sampler \
+#       /home/dlee/code/Grafana/rapl_hf_sampler.c -lm
+#   cp rapl-hf-sampler.service /etc/systemd/system/
+#   systemctl daemon-reload && systemctl enable --now rapl-hf-sampler
+#
+# Runs as root (energy_uj is root-readable), so ~/.secrets is /root/.secrets —
+# copy influx_org.txt + influx_token.txt there (0600) or set HOME= below.
+
+[Unit]
+Description=10 Hz RAPL power + run-queue edge sampler (C, batched writes)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/rapl_hf_sampler --server mycroft
+Environment=HOME=/home/dlee
+Restart=on-failure
+RestartSec=10
+Nice=10
+# Keep the monitoring stack off the benchmark cores: same pin as the 2026-07-09
+# taskset mitigation, made durable (cores 0-3 + their HT siblings 64-67).
+CPUAffinity=0-3 64-67
+MemoryMax=64M
+
+[Install]
+WantedBy=multi-user.target

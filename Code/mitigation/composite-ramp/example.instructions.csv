@@ -1,0 +1,3 @@
+200,0:61,python3 ./ai_sim_2.py --seed 20260722
+200,62:123,./load 62 ./step.waveform
+200,0:0,exit

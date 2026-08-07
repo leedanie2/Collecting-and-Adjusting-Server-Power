@@ -1,0 +1,1 @@
+"""Power-spike detector implementations."""

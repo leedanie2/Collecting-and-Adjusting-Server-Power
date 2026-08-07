@@ -1,0 +1,4 @@
+smoother,runtime,runtime_sd,energy,energy_sd
+rampc,121.1,5.7,161.0,6.7
+powersmoother,3.5,0.2,7.4,0.6
+usagegov,1.1,1.9,11.6,1.5

@@ -1,0 +1,40 @@
+{
+  "power": {
+    "peak_MW": 15.1098,
+    "mean_MW": 14.23,
+    "trace_energy_MJ": 1578.629
+  },
+  "risk": {
+    "rrei_exceedances_per_year": 284559.1,
+    "nrs_MW_per_year": 2434211.506,
+    "lole_proxy_days_per_year": 35.8302,
+    "lole_target_days_per_year": 0.1,
+    "lole_ratio": 358.3025,
+    "cv": 0.0456,
+    "peak_to_mean": 1.0618,
+    "n_exceedances_in_trace": 1,
+    "ramp_limit_MW_s": 0.333,
+    "trace_duration_s": 110.9,
+    "warmup_s": 0.0
+  },
+  "thresholds": {
+    "ramp_limit_MW_s": 0.333,
+    "ramp_limit_source": "Southern Company 20 MW/min cap (arXiv 2601.12686)",
+    "lole_target_days_per_yr": 0.1,
+    "lole_source": "NERC 1-in-10-years resource adequacy standard"
+  },
+  "frequency": {
+    "freq_nadir_hz": 56.6396,
+    "freq_nadir_deviation_hz": -3.3604,
+    "rocof_max_hz_per_s": 1.95192,
+    "under_freq_events_per_year": 51220631.2,
+    "under_freq_limit_hz": 59.3
+  },
+  "voltage": {
+    "min_voltage_pu": 0.90384,
+    "voltage_sag_depth_pu": 0.09616,
+    "voltage_sag_limit_pu": 0.95,
+    "voltage_sag_events_per_yr": 315576000.0,
+    "mean_voltage_pu": 0.92
+  }
+}
