@@ -1,7 +1,0 @@
-# /etc/sudoers.d/slew-governor
-# Validate after install with:
-#   sudo visudo -cf /etc/sudoers.d/slew-governor
-#
-# Exact command used by deploy/slew-governor.service. Keep this narrow: the
-# governor needs root only to write/restore package RAPL power limits.
-dlee ALL=(root) NOPASSWD: /home/dlee/code/Model/analysis/.venv/bin/python -u -m actuators.rapl_capper --slew --ballast --ballast-w-per-core 3.26 --ballast-max-cores 64 --no-engage-on-dips --risk-file /home/dlee/code/Model/analysis/data/spike_risk.flag --events /home/dlee/code/Model/analysis/actuators/data/slew_events.jsonl
