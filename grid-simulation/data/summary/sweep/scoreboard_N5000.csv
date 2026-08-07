@@ -1,4 +1,0 @@
-smoother,cv,cv_sd,peak_to_mean,peak_to_mean_sd,rrei,rrei_sd,nrs,nrs_sd,rocof,rocof_sd,nadir_dev,nadir_dev_sd
-rampc,-91.8,0.9,-8.3,0.7,-6.1,0.9,-90.8,0.9,-65.6,0.8,-74.6,0.9
-powersmoother,0.4,1.9,-1.6,0.7,-3.2,0.2,-9.7,1.7,-4.7,1.2,-3.3,1.6
-usagegov,27.1,4.1,0.5,0.9,15648.8,1726.6,470.7,52.4,42.4,3.4,23.3,2.8

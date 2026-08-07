@@ -1,4 +1,0 @@
-rank,smoother,cv_pct,cv_pct_sd,peak_pct,peak_pct_sd,runtime_pct,runtime_pct_sd,energy_pct,energy_pct_sd,verdict
-1,rampc,-68.8,0.9,-5.1,0.3,121.1,5.7,161.0,6.7,strong smoothing: 69% (+/-1) less variability
-2,powersmoother,0.6,1.9,-0.4,0.0,3.5,0.2,7.4,0.6,no measurable smoothing (+1% (+/-2))
-3,usagegov,15.4,7.6,-0.8,0.3,1.1,1.9,11.6,1.5,WORSENS variability by 15% (+/-8)
