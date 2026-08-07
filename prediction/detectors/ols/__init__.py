@@ -1,1 +1,0 @@
-"""Legacy OLS baseline detector."""
