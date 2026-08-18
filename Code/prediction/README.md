@@ -39,6 +39,41 @@ data/                        the model of record and training metrics
 The scorer writes a risk flag that the slew governor
 (`../mitigation/slew-governor/`) consumes.
 
+## Off-box retraining (champion–challenger)
+
+`detectors/random_forest/trainer.py` runs on a separate host, on a 6 h cycle.
+One cycle:
+
+1. Pull the last 72 h from InfluxDB in 6 h chunks (`cpu_power`, `cpu_usage`,
+   plus the upstream OS signals; `pdu_power` is deliberately not pulled), and
+   keep only weekday business hours.
+2. Cut walk-forward folds — 6 h train, 2 h held-out test, embargoed by the
+   label horizon so forward labels cannot peek into the test window. Walk
+   backward to the most recent fold with ≥20 training positives, ≥500 rows,
+   and ≥1 raw onset in its gate window.
+3. Fit a fresh challenger forest on that **one** 6 h slice, with the rows the
+   incumbent champion gets wrong upweighted 4× (`hard_example_weights`).
+   Calibrate its threshold from out-of-bag scores, then lower it — down to a
+   0.35 production floor — until it hits the target event recall. Signed
+   rise/drop heads are trained alongside on all data preceding the gate window;
+   they are advisory and do not affect the gate.
+4. Score challenger and champion on the *same* two held-out test windows.
+   Promote on event recall first, then on first-flag latency and alert duty;
+   PR-AUC is a fallback only when the window holds no physical onset.
+5. On promotion, write `spike_model_vYYYYmmdd_HHMMSS.pkl` and swap the
+   `spike_model_current` symlink atomically. `scripts/sync_model_to_mycroft.sh`
+   moves it to the instrumented host, where the scorer reads the symlink and
+   falls back safely if it is broken.
+
+Each challenger is a **fresh fit on new data only** — one 6 h window, no
+accumulated history and no warm start. The champion's sole carryover is the
+hard-example weights and its own survival when the gate rejects a challenger.
+Per-cycle results append to `data/trainer_metrics.jsonl`.
+
+The loop promoted eight times in its first week and never again afterwards. See
+[`champion_challenger_notes.md`](champion_challenger_notes.md) for what the
+metrics log says about why.
+
 ## What is retired, and why it is still here
 
 The negative results are the reason the final design looks the way it does, so
