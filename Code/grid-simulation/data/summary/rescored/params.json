@@ -1,0 +1,5 @@
+{
+  "warmup_s": 30.0,
+  "simulink_p0_W": 4465500.0,
+  "tau_ups_s": 15.0
+}

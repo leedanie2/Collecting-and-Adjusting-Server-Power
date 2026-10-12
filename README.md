@@ -43,6 +43,28 @@ be detected, so neither can remove its leading edge, and both perturb the signal
 they detect on. Scored directly, the governor's actuator moves a median 0.23 s
 *after* the transition it is responding to.
 
+### Re-analysis (October 2026)
+
+The table above is as published. Two properties of the Simulink model inflate
+several of its grid numbers: every run starts from a fixed 4.104 MW load (a
+cold start), and the swing equation's operating point is a constant 4.4655 MW
+baked in at build time rather than each trace's own mean.
+`analysis/rescore_warm.py` replicates the model in Python (its `--selfcheck`
+matches the checked-in Simulink outputs to < 1 mHz and < 0.001 pu), sets the
+operating point per trace, and discards the first 30 s (2 × the UPS time
+constant):
+
+| mitigation | CV, published | CV, rescored (n = 4) |
+|---|---|---|
+| di/dt ramp shaping | −68.8 ± 0.9% | **−91.4 ± 1.4%** |
+| standalone smoother | +0.6 ± 1.9% | −8.2 ± 3.5% |
+| slew governor | +15.4 ± 7.6% | −21.2 ± 12.7% (−28.2% at a 45 s warm-up) |
+
+Rescored, all three reduce grid-facing variability, and ramp shaping still
+dominates. At 20,000 servers the frequency nadir is 59.65 Hz, not 56.56 Hz;
+the voltage sag below 0.95 pu near 10,000 servers stands. Runtime and energy
+are unchanged. Results are in `grid-simulation/data/summary/rescored/`.
+
 ## What reproduces, and where
 
 **Python only, from a clone** — the grid and cost results, including every
@@ -58,6 +80,7 @@ python3 analysis/score_detector.py       # detection quality
 python3 figures/make_figures.py          # every figure
 python3 figures/make_experiment_figs.py  # the workload / profile / schematic figures
 python3 analysis/paper_data.py           # PAPER_DATA.md — every published number, sourced
+python3 analysis/rescore_warm.py         # re-analysis without the model's start-up (--selfcheck first)
 ```
 
 `grid-simulation/PAPER_DATA.md` is the sheet to read alongside the paper: each
