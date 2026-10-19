@@ -3,7 +3,10 @@
 Three ways to smooth a server's power draw, all reducing the di/dt the grid
 sees. They make different bets, and the results reflect that: shaping the ramp
 directly removes most of the volatility but costs a great deal of runtime and
-energy, while the two reactive approaches are nearly free and do much less.
+energy, while the two reactive approaches have smaller runtime costs and
+smaller benefits.
+The poster reports CV reductions of 91.4%, 8.2%, and 21.2%, respectively;
+see [results and cost definitions](../grid-simulation/POSTER_DATA.md).
 
 Nothing here predicts. Both reactive designs act only after a transition is
 detected, which bounds how much of the initial edge they can remove, and both
@@ -14,8 +17,8 @@ perturb the very signal they detect on.
 `ramp.c` — di/dt slew-rate shaping applied as a workload ramps up and down,
 optionally gated on the risk flag. Standalone C, one thread per core, and the
 most effective of the three at flattening power: it cut fleet PCC volatility by
-roughly two thirds. It is also the most expensive, roughly doubling runtime on
-HPL once the ramps are counted, which is the tradeoff the results are about.
+91.4 ± 1.4% in the poster's corrected analysis (30 s warm-up, n=4). It is also
+the most expensive, roughly doubling runtime on HPL once the ramps are counted, which is the tradeoff the results are about.
 
 The core list accepts comma lists, ranges, and mixtures (`0:123`, `0-3,96`).
 `./ramp --selfcheck` exercises the risk-file edge, the fail-open paths, the

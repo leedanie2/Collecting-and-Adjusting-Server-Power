@@ -1,0 +1,4 @@
+# Corrected grid analysis; matplotlib is used by the existing figure scripts.
+numpy
+scipy
+matplotlib

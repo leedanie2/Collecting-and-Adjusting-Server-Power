@@ -220,6 +220,11 @@ def build():
 
     A("# PAPER_DATA.md — the numbers, with sources")
     A("")
+    A("> Original paper analysis. The October 2026 poster uses corrected grid "
+      "results documented in [POSTER_DATA.md](POSTER_DATA.md) and "
+      "`data/summary/rescored/`. Grid conclusions below retain the original "
+      "model startup artifacts; full-trace runtime and energy costs still apply.")
+    A("")
     A("One place to look when writing a results paragraph. Every value below is "
       "derived from a checked-in CSV / `metrics.json`, never hand-copied. "
       "Regenerate: `python3 analysis/paper_data.py`.")

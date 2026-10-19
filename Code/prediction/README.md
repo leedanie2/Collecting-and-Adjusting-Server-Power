@@ -1,14 +1,28 @@
 # Prediction
 
-A regime detector that flags when a server is entering a spiky power regime, so
-the governor can pre-engage.
+Forecasting and early-detection experiments for server power transitions.
+The poster's conclusion is that these methods did not establish reliable
+advance warning with the available telemetry. The final mitigation uses a
+reactive CPU-utilization edge detector.
 
-The scope is deliberate, and it narrowed over the project. A power spike's onset
-is a near-instant step with no leading structure in the power signal itself, so
-it cannot be forecast at these sample rates. What is predictable — from upstream
-OS-scheduler signals (run-queue jerk, memory deltas) combined with the current
-power regime — is that a burst is imminent a few seconds out. The detector
-targets that, not the exact onset.
+The original goal was to predict a spiky regime early enough to pre-engage the
+governor. Upstream signals such as run-queue jerk showed precursor structure,
+but the evaluated models did not turn that structure into reliable onset
+forecasts. The poster summarizes the results:
+
+| Approach | Reported outcome |
+|---|---|
+| OLS, 5 s horizon | Detected 19 of 1,735 spikes |
+| Random forest + Kalman filter | PR-AUC 0.68; flags 10–20 s late |
+| Run-queue jerk / Hawkes process | Precursor d = 1.5; branching 0.84–0.96; no reliable forecast |
+| CPU-utilization edge detector | About one 10 Hz sample response; 5 alarms/hour in the detector comparison |
+
+A separate evaluation of the governor's actuation found 33% recall, 19%
+precision, and a median 0.23 s delay, with ±0.5 s phase-anchor uncertainty.
+Those scores use a different collection from both the exploratory model work
+and the 48-trace mitigation matrix. See
+[poster provenance](../grid-simulation/POSTER_DATA.md) and
+[detector collection](../grid-simulation/data/detector/README.md).
 
 ## Layout
 

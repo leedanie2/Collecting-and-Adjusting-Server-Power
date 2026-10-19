@@ -1,0 +1,5 @@
+condition,v_swing_pct,v_swing_sd,min_v_pu,min_v_sd
+baseline,1.411,0.026,0.9536,0.0007
+powersmoother,1.366,0.026,0.9524,0.0001
+usagegov,1.193,0.047,0.9548,0.0007
+rampc,0.344,0.005,0.9607,0.0

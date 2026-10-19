@@ -1,5 +1,22 @@
 # Figures
 
+## Poster figures and corrected results
+
+The supplied poster charts are in
+[`Deliverables/Poster/figures/`](../../../Deliverables/Poster/figures/):
+`C_hero_steady.png` (measured HPL and simulated facility power), `F_voltage.png`
+(voltage swing), and `E_tradeoff.png` (corrected CV benefit and full-trace cost).
+Their data and definitions are documented in [POSTER_DATA.md](../POSTER_DATA.md).
+`analysis/rescore_warm.py` regenerates the corrected tables, including
+`data/summary/rescored/voltage_swing.csv`.
+
+## Original paper figures
+
+The scripts and figures listed below reproduce the earlier paper's analysis.
+Their grid conclusions include the original model startup artifacts and are
+superseded by the poster's corrected results (91.4%, 8.2%, and 21.2% CV
+reductions). The original runtime and energy cost figures remain applicable.
+
 Presentation figures, regenerated from checked-in data with Python + matplotlib
 (no MATLAB): `python3 figures/make_figures.py`.
 

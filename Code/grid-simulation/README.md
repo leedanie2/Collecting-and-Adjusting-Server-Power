@@ -8,38 +8,48 @@ power trace (one server)
   -> fleet aggregation (10,000 servers, worst-case in-phase) + non-CPU load
   -> double-conversion UPS (15 s low-pass)
   -> Simulink phasor microgrid (swing-equation governor, PCC voltage)
-  -> grid-risk metrics vs NERC/IEEE thresholds
+  -> grid-risk metrics against study thresholds informed by NERC/IEEE sources
 ```
 
 Worst-case aggregation is the upper bound: every server runs the same trace in
 phase, with no diversity cancellation.
 
-## Result
+## Poster results (October 2026 corrected analysis)
 
-The full 3×4 matrix was collected four times on a quiesced server, so every
-number below carries a run-to-run error bar (`data/summary/summary.md`):
+The 3×4 experiment matrix was collected four times. The poster uses the Python
+replica in `analysis/rescore_warm.py`, with a per-trace operating point and a
+30 s warm-up, to remove the original model's startup artifacts.
 
-| rank | mitigation | CV (flatness) | peak | runtime | energy | verdict |
-|---|---|---|---|---|---|---|
-| 1 | **rampc** | **−68.8 ± 0.9%** | −5.1 ± 0.3% | +121 ± 6% | +161 ± 7% | strong smoothing, high cost |
-| 2 | powersmoother | +0.6 ± 1.9% | −0.4% | +3.5 ± 0.2% | +7.4 ± 0.6% | no measurable smoothing |
-| 3 | usagegov | +16.0 ± 4.9% | −0.8 ± 0.2% | +1.1 ± 1.8% | +11.6 ± 0.7% | worsens variability |
+| Mitigation | Grid CV reduction | Extra runtime | Extra CPU energy |
+|---|---:|---:|---:|
+| Ramp & fill (`rampc`) | **91.4 ± 1.4%** | +121.1 ± 5.7% | +161.0 ± 6.7% |
+| Power smoother | 8.2 ± 3.5% | +3.5 ± 0.2% | +7.4 ± 0.6% |
+| Governor (`usagegov`) | 21.2 ± 12.7% | +1.1 ± 1.9% | +11.6 ± 1.5% |
 
-Mean ± SD across the four runs. Negative is better for CV/peak/runtime; energy
-is a cost. **di/dt ramp shaping (`rampc`) is the only mitigation that flattens
-the grid-facing load** — it cuts the coefficient of variation of PCC power by
-69%, but at a real cost: **~2.2× wall-time (+121%) and ~2.6× energy (+161%)**,
-because it wraps the workload in ramp-up/down ballast. The standalone power
-smoother does nothing measurable at this timescale, and the slew governor makes
-variability worse. CV is on the trimmed plateau; **runtime and energy are the
-full untrimmed trace**, so the ramp flanks count as the real cost they are (the
-plateau-only figures — +7% runtime, +38% energy — describe only the workload
-once ramped, and understate the mitigation). The CV bar is tight (±0.9%) even
-though raw per-cell runtimes swung 10–19% between runs — the grid metric is
-stable; wall-clock time is the noisy one, which is why four collections were taken.
+Average over the three workloads within each run, then mean ± sample SD across
+four runs. CV is facility power after the UPS; ramp & fill is scored on its
+plateau. Runtime and CPU energy include the full trace and its ramp flanks.
+All three methods reduce variability in this analysis, with the strongest
+reduction and highest cost from ramp & fill.
 
-Regenerate with `python3 analysis/summarize_n4.py` (Python only — the per-run
-metrics are checked in).
+Voltage swing falls from 1.411 ± 0.026% of nominal at baseline to
+0.344 ± 0.005% with ramp & fill, 1.366 ± 0.026% with the smoother, and
+1.193 ± 0.047% with the governor. The worst baseline voltage is 0.9488 pu at
+10,000 servers; at 20,000 servers frequency reaches 59.654 Hz. Voltage crosses
+the study threshold first in this scenario.
+
+[POSTER_DATA.md](POSTER_DATA.md) maps these results to data, assumptions, and
+commands. [The poster](../../Deliverables/Poster/README.md) includes the PDF,
+PPTX, and chart snapshots. A 45 s warm-up gives governor CV reduction
+28.2 ± 12.1%, illustrating the scoring-window sensitivity.
+
+### Original paper analysis
+
+`data/summary/summary.md`, `scoreboard.csv`, `full_ranking.csv`, and
+[PAPER_DATA.md](PAPER_DATA.md) preserve the original Simulink analysis. Its
+fixed initial load and stale operating point led to CV changes of −68.8%,
++0.6%, and +15.4%, respectively. Use `data/summary/rescored/` for the poster's
+grid conclusions. The original full-trace cost columns remain applicable.
 
 ## Layout
 
@@ -62,7 +72,8 @@ data/runs/     run{1,2,3,4}/  the four repeat collections (raw traces + logs)
 data/detector/ run{1,2,3,4}/  workload phase logs + governor event logs, the
                inputs for detection scoring (see the README there — these are
                NOT from the same collection as data/runs/)
-data/summary/  the n=4 scoreboard: scoreboard.csv, matrix.csv, summary.md,
+data/summary/rescored/  corrected CV, voltage swing, and fleet-size sweep
+data/summary/  the original n=4 scoreboard: scoreboard.csv, matrix.csv, summary.md,
                full_ranking.{csv,md}, detector_scores.csv
 data/comparisons/, data/plots/   scored comparisons and baseline/smoother overlays
 results/<run>_worst/       one-run simulation outputs (S_PCC, freq_dev, V_PCC) + metrics.json
@@ -121,10 +132,12 @@ lead times with the ±0.5 s anchor uncertainty documented in
 ## Reproduce with Python only (no MATLAB)
 
 The simulation outputs are checked in under `results/`, so the metrics and
-comparison tables regenerate with just Python and NumPy:
+comparison tables regenerate with Python and the dependencies in `requirements.txt`:
 
 ```bash
-python3 analysis/summarize_n4.py                           # the n=4 scoreboard
+python3 analysis/rescore_warm.py --selfcheck                # validate the Python replica
+python3 analysis/rescore_warm.py                            # corrected poster grid results
+python3 analysis/summarize_n4.py                           # original grid scores + full-trace costs
 python3 analysis/cost_edges.py                             # ramp.c cost, split at the ramps
 python3 analysis/summarize_sweep.py                        # 1k/5k/10k/20k fleet sizes
 python3 analysis/paper_data.py                             # PAPER_DATA.md, every number sourced
@@ -133,8 +146,8 @@ python3 analysis/compare_pair.py hpl_baseline hpl_rampc --out hpl_rampc
 ```
 
 `summarize_n4.py` reads the checked-in per-run metrics and writes
-`data/summary/` — the headline table above. `compare_pair.py` drills into one
-baseline-vs-mitigation pair, printing cost (energy-area ratio) and all thirteen
+`data/summary/` — the original paper table and the cost columns above.
+`compare_pair.py` drills into one baseline-vs-mitigation pair, printing cost (energy-area ratio) and all thirteen
 metrics as baseline / smoother / percent change into
 `data/comparisons/<name>_comparison.csv`.
 
@@ -149,7 +162,11 @@ scripts/sim_trace.sh hpl_baseline.csv         # -> results/hpl_baseline_worst/
 scripts/score_all.sh hpl_baseline_worst
 ```
 
-## Metrics
+## Original Simulink metrics
+
+The discussion below describes the original outputs and explains why the
+poster uses rescoring. The corrected replica also reports continuous voltage
+swing, which distinguishes mitigation effects; see [POSTER_DATA.md](POSTER_DATA.md).
 
 The pipeline computes thirteen metrics, but only four **discriminate** between
 mitigations at this fleet scale, and the scoreboard ranks on those alone:

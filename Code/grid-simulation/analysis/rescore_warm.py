@@ -27,6 +27,10 @@ first WARMUP_S seconds (2 x tau_ups), which also removes the one-time job start
 that the UPS stretches over ~3 tau. 45 s is reported alongside as a sensitivity
 check. Runtime/energy/Gflops are unaffected and stay in summarize_n4.py.
 
+Also exports voltage_swing.csv for the poster: peak-to-trough PCC voltage as a
+percentage of nominal, averaged over workloads within each run, then mean and
+sample SD across four runs. Uses the same 0.1 s grid and 30 s warm-up as CV.
+
     python3 analysis/rescore_warm.py            # -> data/summary/rescored/
     python3 analysis/rescore_warm.py --selfcheck
 """
@@ -120,6 +124,7 @@ def score(t, p, n_servers=10000, skip=WARMUP_S):
         "nadir_hz": float(F0 + df[kf].min()),
         "rocof_hz_s": float(np.abs(np.gradient(df[kf], tf[kf])).max()),
         "min_v_pu": float(V[k].min()),
+        "v_swing_pct": float(100 * np.ptp(V[k])),
         "mean_MW": float(Pg[k].mean() / 1e6),
     }
 
@@ -160,13 +165,18 @@ def main():
 
     OUT.mkdir(parents=True, exist_ok=True)
     matrix, board = [], []
+    voltage = {m: {r: [] for r in RUNS} for m in ["baseline"] + SMOOTHERS}
     for skip in (WARMUP_S, 45.0):
         per = {}
         for r in RUNS:
             for w in WORKLOADS:
                 b = score(*trace(w, "baseline", r), skip=skip)
+                if skip == WARMUP_S:
+                    voltage["baseline"][r].append(b)
                 for m in SMOOTHERS:
                     s = score(*trace(w, m, r), skip=skip)
+                    if skip == WARMUP_S:
+                        voltage[m][r].append(s)
                     row = {"warmup_s": skip, "run": r, "workload": w, "mitigation": m,
                            "cv_pct": round(100 * (s["cv"] / b["cv"] - 1), 2),
                            "min_v_delta_pu": round(s["min_v_pu"] - b["min_v_pu"], 5)}
@@ -191,7 +201,20 @@ def main():
                       "rocof_hz_s": round(max(x["rocof_hz_s"] for x in s), 4),
                       "mean_MW": round(np.mean([x["mean_MW"] for x in s]), 3)})
 
-    for name, rows in (("matrix.csv", matrix), ("scoreboard.csv", board), ("sweep.csv", sweep)):
+    voltage_board = []
+    for m in ["baseline", "powersmoother", "usagegov", "rampc"]:
+        swings = [np.mean([s["v_swing_pct"] for s in voltage[m][r]]) for r in RUNS]
+        minima = [np.mean([s["min_v_pu"] for s in voltage[m][r]]) for r in RUNS]
+        voltage_board.append({
+            "condition": m,
+            "v_swing_pct": round(float(np.mean(swings)), 3),
+            "v_swing_sd": round(float(np.std(swings, ddof=1)), 3),
+            "min_v_pu": round(float(np.mean(minima)), 4),
+            "min_v_sd": round(float(np.std(minima, ddof=1)), 4),
+        })
+
+    for name, rows in (("matrix.csv", matrix), ("scoreboard.csv", board),
+                       ("sweep.csv", sweep), ("voltage_swing.csv", voltage_board)):
         with open(OUT / name, "w", newline="") as fh:
             wr = csv.DictWriter(fh, fieldnames=list(rows[0]))
             wr.writeheader()

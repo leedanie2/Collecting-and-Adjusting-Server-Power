@@ -7,7 +7,8 @@ the observability stack first — see "Why quiesced" below).
 data/
   runs/        run{1,2,3,4}/   four repeat collections: raw traces + workload logs
   traces/      one reference trace per cell, for the single-run tooling
-  summary/     scoreboard.csv, matrix.csv, full_ranking.csv, cost_edges.csv, sweep/
+  summary/rescored/  corrected poster CV, voltage swings, and fleet-size sweep
+  summary/     original scoreboard.csv, matrix.csv, full_ranking.csv, cost_edges.csv, sweep/
   plots/       plot_traces.py overlays, one per (workload, mitigation)
   comparisons/ compare_pair.py tables, one per (workload, mitigation)
   detector/    governor event logs + phase logs (a separate, earlier collection)
@@ -48,9 +49,14 @@ exist to measure. `scripts/quiesce.sh` stops it before a collection.
 
 ## Reading the results
 
-Start at `summary/summary.md` — one ranked table, "which mitigation wins".
+For the poster, start at [POSTER_DATA.md](../POSTER_DATA.md) and
+`summary/rescored/`. `rescore_warm.py` regenerates those corrected grid tables.
+`voltage_swing.csv` reports peak-to-trough voltage after a 30 s warm-up, with
+workload averages within runs and sample SD across the four runs.
+
+`summary/summary.md` is the original paper's ranked table.
 `summary/scoreboard.csv` is the same thing machine-readable, `matrix.csv` is the
-per-cell backing (48 rows = 4 runs × 3 workloads × 3 mitigations), and
+per-cell backing (36 rows = 4 runs × 3 workloads × 3 mitigations), and
 `full_ranking.csv` carries all thirteen metrics with a trust tag on each.
 `../PAPER_DATA.md` derives every published number from these files and cites the
 file each one came from.

@@ -28,6 +28,18 @@ records (`/proc/stat`'s `procs_running`) is the signal the detector work leans
 on, and it is the one field here that leads a power transient rather than
 trailing it.
 
+## Poster measurement summary
+
+The poster combines 10 Hz RAPL, 1 Hz Linux `/proc` telemetry, 69 Redfish fields
+every 10 s, and PDU real power at approximately 1.8 Hz in an InfluxDB/Grafana
+monitor with 5 s dashboard refresh. The PDU rate depends on request latency.
+
+It reports sampling overhead of 2.19% of one core (0.017% of the 128-thread
+host) and +0.15 W for the sampling daemon. These figures describe sampling;
+the database and other services add overhead and are stopped for the workload
+collections. See the [poster](../../Deliverables/Poster/README.md) and
+[collection procedure](../grid-simulation/README.md#how-a-collection-was-taken).
+
 ## Sampling rate
 
 Sampling faster than 10 Hz on this hardware produces phantom kilowatt spikes.

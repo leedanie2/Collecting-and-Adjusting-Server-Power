@@ -1,5 +1,7 @@
 # PAPER_DATA.md — the numbers, with sources
 
+> Original paper analysis. The October 2026 poster uses corrected grid results documented in [POSTER_DATA.md](POSTER_DATA.md) and `data/summary/rescored/`. Grid conclusions below retain the original model startup artifacts; full-trace runtime and energy costs still apply.
+
 One place to look when writing a results paragraph. Every value below is derived from a checked-in CSV / `metrics.json`, never hand-copied. Regenerate: `python3 analysis/paper_data.py`.
 
 **Study in one line:** one measured server's CPU power (RAPL) → 10,000-server worst-case (all in-phase) fleet aggregation → 15 s UPS low-pass → phasor microgrid (swing equation, 50 MW base, H=2.5) → grid-risk metrics. 3 workloads × 4 conditions × **n=4** repeat collections = 48 simulations at N=10000, plus 144 more across the fleet-size sweep.
