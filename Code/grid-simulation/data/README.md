@@ -24,9 +24,10 @@ condition ∈ {baseline, rampc, powersmoother, usagegov}.
 other.
 
 - `runs/run<N>/<cell>.csv` — the 3×4 matrix, collected four times. This is what
-  every published number comes from: `summarize_n4.py`, `rank_all.py`,
-  `cost_edges.py` and the sweep all read `runs/` plus the matching
-  `results/<cell>_r<N>_worst/metrics.json`. The aisim2 schedule seed is pinned
+  the poster's grid and cost comparisons come from. `rescore_warm.py` reads
+  these raw traces to regenerate corrected grid results. The original
+  `summarize_n4.py`, `rank_all.py`, `cost_edges.py`, and fleet-size analysis
+  use these traces and/or matching `results/<cell>_r<N>_worst/metrics.json`. The aisim2 schedule seed is pinned
   across the four runs, so the repeats measure system variance rather than
   workload luck.
 - `traces/<cell>.csv` — one earlier reference trace per cell, kept because the
@@ -57,9 +58,10 @@ workload averages within runs and sample SD across the four runs.
 `summary/summary.md` is the original paper's ranked table.
 `summary/scoreboard.csv` is the same thing machine-readable, `matrix.csv` is the
 per-cell backing (36 rows = 4 runs × 3 workloads × 3 mitigations), and
-`full_ranking.csv` carries all thirteen metrics with a trust tag on each.
-`../PAPER_DATA.md` derives every published number from these files and cites the
-file each one came from.
+`full_ranking.csv` carries the original grid/cost metrics and separate detector
+scores with diagnostic tags. `../PAPER_DATA.md` derives the original paper's
+tables from these files; `../POSTER_DATA.md` maps the corrected poster results
+to their sources.
 
 ## Not included
 

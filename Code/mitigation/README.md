@@ -75,8 +75,9 @@ plateau — it shapes the edge two ways:
 - The RAPL PL2 cap is hugged to current power and released at a bounded slope,
   as the rising-edge backstop.
 - SCHED_IDLE ballast (spinner threads) fills dips so power descends at a bounded
-  slope, and pre-burns ahead of a risk-flagged onset so real work displaces the
-  spinners watt-for-watt with near-zero net step.
+  slope. An optional risk-flag path attempts to pre-burn so real work can
+  displace the spinners. That design capability does not establish successful
+  forecasting: the poster's evaluated governor acts after transitions begin.
 
 Ballast accounting is calibration-free: each spinner's achieved burn is read
 from its CPU time, so a power-starved spinner contending with the real job is

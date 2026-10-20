@@ -87,7 +87,7 @@ Three workloads — `hpl`, `aisim2`, `step` — each as a baseline and under thr
 mitigations: `rampc` (di/dt ramp shaping), `powersmoother` (standalone smoother
 daemon), and `usagegov` (the slew governor). Twelve cells, nine
 baseline-vs-mitigation comparisons. The whole matrix was collected four times
-(`data/runs/run{1,2,3,4}/`) so the headline scoreboard reports mean ± SD, not a
+(`data/runs/run{1,2,3,4}/`) so the original and corrected scoreboards report mean ± SD, not a
 single draw. `data/traces/` holds one representative run for the per-pair tables
 and plots.
 
@@ -168,8 +168,8 @@ The discussion below describes the original outputs and explains why the
 poster uses rescoring. The corrected replica also reports continuous voltage
 swing, which distinguishes mitigation effects; see [POSTER_DATA.md](POSTER_DATA.md).
 
-The pipeline computes thirteen metrics, but only four **discriminate** between
-mitigations at this fleet scale, and the scoreboard ranks on those alone:
+The original scoreboard ranks on four grid/cost quantities. Its grid
+conclusions are superseded by the corrected poster analysis:
 
 ```
 CV       coefficient of variation of PCC power — flatness (the target)

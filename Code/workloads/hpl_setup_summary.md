@@ -78,7 +78,14 @@ make arch=Linux
 
 ---
 
-## Running the Benchmark
+## Initial build smoke check
+
+The four-rank commands below record the initial installation check and require
+a matching four-rank process grid in the installation's `HPL.dat`. They are
+not the poster workload configuration. The committed [HPL.dat](HPL.dat) uses
+N = 80,000, NB = 192, P × Q = 8 × 16 and requires 128 ranks;
+[ai_load.sh](ai_load.sh) adds the 18 s busy / 3 s pause cycle. See the
+[workload guide](README.md#hpl).
 
 ```bash
 cd /home/<user>/hpl-2.3/bin/Linux

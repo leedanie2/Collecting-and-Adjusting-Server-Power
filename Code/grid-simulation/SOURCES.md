@@ -1,7 +1,16 @@
 # Sources — Grid Resiliency Metrics & Standards
 
 Research compiled to support normalization of simulation risk metrics against real-world
-industry thresholds. Organized by topic.
+industry references. Organized by topic.
+
+## Interpretation in the poster
+
+This is the original study bibliography, not a compliance checklist. The
+poster uses 0.95 pu voltage, 59.3 Hz frequency, and 20 MW/min ramp rate as
+study evaluation references. A citation does not make these universal limits,
+and threshold crossings or solver failure alone do not demonstrate damage.
+The corrected results and model assumptions are in
+[POSTER_DATA.md](POSTER_DATA.md).
 
 ---
 
@@ -124,8 +133,9 @@ standard governor values.
   are the standard setting of the islanded-operation literature (see Milano
   et al. 2018; IEEE 1547.4 islanded-system planning).
 
-Effect: lifts freq nadir/ROCOF out of the inert ~59.995 Hz regime so the
-frequency-side metrics become discriminative (numbers in
-`results/*/metrics.json`). The LOLE proxy in
+The retune made frequency more sensitive in the original model, but its
+fixed operating point and startup also biased `results/*/metrics.json`.
+The corrected sweep gives a 59.654 Hz nadir at 20,000 servers; voltage crosses
+the study threshold first. Use `data/summary/rescored/` for that conclusion. The LOLE proxy in
 `analysis/grid_metrics.py` is RREI-based and does not consume S_base — it is
 unaffected by this retune.

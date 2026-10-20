@@ -1,4 +1,6 @@
-# Which mitigation wins? (n=4, mean ± SD across runs)
+# Original paper scoreboard (n=4, mean ± SD across runs)
+
+> Historical grid scores: the October 2026 poster supersedes these CV conclusions. Corrected reductions are 91.4% (ramp & fill), 8.2% (power smoother), and 21.2% (governor). See [POSTER_DATA.md](../../POSTER_DATA.md) and [corrected tables](rescored/). Full-trace runtime and energy costs below remain applicable.
 
 | rank | mitigation | CV | peak | runtime | energy | verdict |
 |---|---|---|---|---|---|---|
@@ -6,7 +8,7 @@
 | 2 | **powersmoother** | +0.6 ± 1.9% | -0.4% | +3.5 ± 0.2% | +7.4 ± 0.6% | no measurable smoothing (+1% (+/-2)) |
 | 3 | **usagegov** | +15.4 ± 7.6% | -0.8 ± 0.3% | +1.1 ± 1.9% | +11.6 ± 1.5% | WORSENS variability by 15% (+/-8) |
 
-Each cell: mean ± standard deviation across four repeat collections of the full 3×4 matrix (quiesced server, aisim2 schedule seed pinned). Negative = mitigation lower (better) for CV/peak/runtime; energy is a cost either way. CV and peak are on the simulated PCC power (post 15 s UPS filter, plateau only); **runtime and energy are the full untrimmed trace** — ramp.c's ramp-up/down ballast is real time and energy the mitigation costs.
+Each cell: average the three workload comparisons within each run, then mean ± sample standard deviation across four repeat collections of the full 3×4 matrix (quiesced server, aisim2 schedule seed pinned). Negative = mitigation lower (better) for CV/peak/runtime; energy is a cost either way. CV and peak are on the simulated PCC power (post 15 s UPS filter, plateau only); **runtime and energy are the full untrimmed trace** — ramp.c's ramp-up/down ballast is real time and energy the mitigation costs.
 
-Ranked by CV reduction — the flatness a smoother exists to deliver. The ± is run-to-run spread; where it rivals the mean (runtime, energy), a single collection cannot be trusted, which is why three were taken. Per-cell numbers: `matrix.csv` (run × workload × mitigation).
+Ranked by CV reduction — the flatness a smoother exists to deliver. The ± is run-to-run spread; where it rivals the mean (runtime, energy), a single collection cannot be trusted, which is why four were taken. Per-cell numbers: `matrix.csv` (run × workload × mitigation).
 

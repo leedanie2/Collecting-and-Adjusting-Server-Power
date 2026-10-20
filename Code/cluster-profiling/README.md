@@ -14,7 +14,10 @@ python3 fleet_cdf_viz.py --selfcheck
 `--real` builds the fleet from the grid-simulation traces
 (`../grid-simulation/data/traces/`) as phase-shifted, gain- and noise-jittered
 variants of each measured trace, so the clusters correspond to real workload
-shapes.
+shapes. This is a constructed fleet, not telemetry measured from 200 servers.
+The poster's grid-risk scenario instead copies one measured server trace in
+phase to 10,000 servers; the two aggregation assumptions serve different
+experiments. See [poster assumptions](../grid-simulation/POSTER_DATA.md).
 
 Needs `numpy`, `scipy`, and `plotly`. The generated `index.html` (~13 MB, with
 plotly inlined so it works offline) is not checked in.

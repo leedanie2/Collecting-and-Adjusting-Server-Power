@@ -29,9 +29,10 @@ causally upstream of the power step, so they are the honest reference for a
 lead-time claim. Only `aisim2` is scored: HPL and the step workload carry no
 phase log.
 
-Alerts are the governor's `events.jsonl` — `preburn dir=+1` for ballast ramped
-ahead of a predicted rise, `dir=-1` ahead of a predicted fall, `engage` for the
-RAPL ceiling taking hold. Scoring actuation rather than the detector's own
+Alerts are the governor's `events.jsonl`: `preburn dir=+1` and `dir=-1`
+record ballast actions associated with rise and fall flags; `engage` records
+the RAPL ceiling taking hold. The event name `preburn` describes an actuator
+mode and does not establish that the action preceded a workload transition. Scoring actuation rather than the detector's own
 output is the stricter reading: a detector edge that never moved the actuator
 did nothing for the grid.
 
@@ -43,7 +44,17 @@ onset within a run therefore shares one anchor uncertainty of about ±0.5 s,
 while relative spacing is exact. **Lead times below ~1 s should not be read as
 precise** — which covers nearly all of them.
 
+## Poster result
+
+Across these four runs, 8 of 24 transitions were detected (33% recall), with
+19% precision and reported median lead −0.23 s (0.23 s late). This supports
+reactive detection, with the timing uncertainty above. The poster's separate
+one-sample response and 5 alarms/hour comparison uses a different evaluation;
+those values should not be combined with this collection's scores.
+
 ## Reproducing
+
+Run from `Code/grid-simulation/`:
 
 ```bash
 python3 analysis/score_detector.py             # writes data/summary/detector_scores.csv

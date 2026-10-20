@@ -22,8 +22,10 @@ hpl_setup_summary.md   HPL build and configuration notes
 a 51.2 GB working set) and imposes the duty cycle itself by sending
 SIGSTOP/SIGCONT to each rank with a 3 ms stagger. Because the job is
 completion-based rather than fixed-duration, its runtime varies with anything
-that slows it down — which is exactly what makes it the workload the cost
-numbers come from. Sustained Gflops is read from the `WR00R2R4` line.
+that slows it down. HPL supplies the completion-time and sustained-Gflops
+comparison; the poster's headline runtime and energy costs average full-trace
+comparisons across all three workloads. Sustained Gflops is read from the
+`WR00R2R4` line.
 
 ## AI simulation
 
@@ -57,4 +59,7 @@ cc -O2 -pthread -o load load.c -lm
 ./load 128 step.waveform
 ```
 
-Traces captured from these runs are under `../grid-simulation/data/traces/`.
+The poster's 48-trace matrix is in `../grid-simulation/data/runs/run{1,2,3,4}/`:
+three workloads × four conditions × four repeats. `../grid-simulation/data/traces/`
+contains a separate earlier reference collection. See the
+[data guide](../grid-simulation/data/README.md) before combining results.

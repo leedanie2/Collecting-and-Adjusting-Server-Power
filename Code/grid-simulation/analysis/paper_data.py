@@ -257,8 +257,8 @@ def build():
         ("droop / damping / gov", "R = 0.05, D = 1, `tau_gov` = 20 s", "`readscript.m` (unchanged since 2026-07-13 retune)"),
         ("ramp limit", "0.333 MW/s (= 20 MW/min, Southern Company large-load cap)", "`analysis/grid_metrics.py:31`"),
         ("LOLE target", "0.1 days/yr (NERC 1-in-10)", "`grid_metrics.py:33`"),
-        ("under-freq threshold", "59.3 Hz (−0.7 Hz, NERC BAL-003 relay)", "`grid_metrics.py:34`"),
-        ("voltage sag threshold", "0.95 pu (IEEE 1159)", "`grid_metrics.py:35`"),
+        ("under-freq threshold", "59.3 Hz (study reference; NERC context)", "`grid_metrics.py:34`"),
+        ("voltage sag threshold", "0.95 pu (study reference; see POSTER_DATA.md)", "`grid_metrics.py:35`"),
         ("metric resample", "uniform 0.1 s (matches RAPL cadence)", "`grid_metrics.py:60`"),
         ("warm-up discarded", "**0 s** — every number here includes the t=0 fleet cold start", "`grid_metrics.py` `WARMUP_S=0.0`"),
         ("aisim2 schedule seed", "3555822270 (pinned, so repeats measure system variance)", "`README.md` §setup"),
@@ -274,29 +274,26 @@ def build():
     A("")
 
     # ---- 1. headline
-    A("## 1. Headline numbers")
+    A("## 1. Original paper numbers (grid conclusions superseded)")
     A("")
     A("Source: `data/summary/scoreboard.csv` (← `analysis/summarize_n4.py`); "
       "per-cell backing `data/summary/matrix.csv`. % vs the same workload's "
       "baseline, averaged over 3 workloads within a run, then mean ± SD over the 4 runs.")
     A("")
-    A("| mitigation | CV (flatness) | peak-to-mean | runtime | energy | survives scrutiny? |")
+    A("| mitigation | CV (flatness) | peak-to-mean | runtime | energy | interpretation |")
     A("|---|---|---|---|---|---|")
     for s in MITIG:
         r = sb[s]
-        cvm, cvsd = float(r["cv_pct"]), float(r["cv_pct_sd"])
         cells = []
         for c in ["cv_pct", "peak_pct", "runtime_pct", "energy_pct"]:
             cells.append(pm(float(r[c]), float(r[c + "_sd"])) + "%")
-        v = {"rampc": f"**CV: real** ({abs(cvm)/cvsd:.0f}× its SD, same sign in all 3 "
-                      "workloads and all 4 fleet sizes). peak/runtime/energy: real.",
-             "powersmoother": "**CV: within-noise** (+0.6 ± 1.9 — do not report as a "
-                              "reduction *or* an increase). peak −0.4%: real but negligible. "
-                              "cost: real, small.",
-             "usagegov": "**CV: worsens at warm-up 0, improves at warm-up 45 s.** The "
-                         "+15% is dominated by the ballast pool's t=0 spin-up; excluding "
-                         "45 s it becomes −28.1 ± 12.2%. Do not quote either number "
-                         "without saying which. cost: real, small."}[s]
+        v = {"rampc": "Original grid result; corrected poster CV reduction is "
+                      "91.4 ± 1.4%. Full-trace costs still apply.",
+             "powersmoother": "Original grid result; corrected poster CV reduction "
+                              "is 8.2 ± 3.5%. Full-trace costs still apply.",
+             "usagegov": "Original grid result; corrected poster CV reduction is "
+                         "21.2 ± 12.7% at 30 s, or 28.2 ± 12.1% at 45 s. "
+                         "Full-trace costs still apply."}[s]
         A(f"| **{DISPLAY[s]}** | {cells[0]} | {cells[1]} | {cells[2]} | {cells[3]} | {v} |")
     A("")
     A("Negative is better for CV / peak / runtime; energy is a cost either way. A fifth "
@@ -342,8 +339,8 @@ def build():
     A("| metric | unit | dir | plain English | tier | ramp.c | power smoother | slew gov | use it? |")
     A("|---|---|---|---|---|---|---|---|---|")
     META = [
-        ("CV", "dimensionless", "lower", "SD/mean of fleet PCC power — flatness", "direct", "**YES — the headline metric**"),
-        ("peak-to-mean", "dimensionless", "lower", "max/mean of PCC power — headroom the utility must hold", "direct", "yes"),
+        ("CV", "dimensionless", "lower", "SD/mean of fleet PCC power — flatness", "direct", "use corrected poster CV"),
+        ("peak-to-mean", "dimensionless", "lower", "max/mean of PCC power — headroom the utility must hold", "direct", "original analysis only"),
         ("runtime", "s", "lower", "wall-clock of the full untrimmed trace", "perf", "yes (cost)"),
         ("energy", "J", "lower", "∫P dt over the full untrimmed trace", "perf", "yes (cost)"),
         ("ROCOF", "Hz/s", "lower", "max \\|df/dt\\| from the swing equation", "coldstart", "**NO as-is** — t=0 artifact"),
@@ -423,12 +420,13 @@ def build():
     A("| 50,000 | ~37 | ~0.74 | — | **solver diverged** | — | — | — |")
     A("| 100,000 | ~74 | ~1.47 | — | **solver diverged** | — | — | — |")
     A("")
-    A("**Constraint, state it as one:** the model has a hard upper bound at "
-      "**N ≈ 20,000 servers on a 50 MW grid**. At N=50,000 (~37 MW) and N=100,000 (~74 MW) "
-      "the phasor solver fails at t ≈ 0.001 s — the weak grid physically cannot host the "
-      "fleet, this is not \"degraded metrics\". Voltage crosses the 0.95 pu NERC/IEEE sag "
-      "limit by N=10,000 and craters to 0.8924 pu at N=20,000; frequency nadir falls to "
-      "56.56 Hz, far below the 59.3 Hz under-frequency relay threshold.")
+    A("**Historical solver limitation:** the original phasor runs at N=50,000 "
+      "and N=100,000 fail near t = 0.001 s. Non-convergence alone does not "
+      "establish a physical hosting limit. The fixed operating point affects "
+      "the frequency results throughout this table. The corrected sweep in "
+      "[POSTER_DATA.md](POSTER_DATA.md) gives worst baseline voltage 0.9488 pu "
+      "at 10,000 servers and 0.8826 pu at 20,000, with frequency nadir "
+      "59.654 Hz at 20,000. Voltage crosses the study threshold first.")
     A("")
     A("Load scaling itself is exact (mean MW ∝ N):")
     A("")
@@ -437,7 +435,7 @@ def build():
     for n, mw, per in sweep_cv_linearity():
         A(f"| {n:,} | {mw:.4f} | {per:.4f} |")
     A("")
-    A("All N-dependence above is nonlinear **grid response**, as intended.")
+    A("These original grid metrics also depend on startup and fixed-operating-point artifacts.")
     A("")
     A("### Does ramp.c still win at every scale? (CV %, n=4)")
     A("")
@@ -461,15 +459,16 @@ def build():
         A("")
     A("ramp.c wins CV at **every solvable scale** — the ranking is robust to fleet size. "
       "The *magnitude* is not: it swings −18.7% (1k) → −91.8% (5k) → −68.8% (10k) → "
-      "−56.6% (20k). Quote **−68.8 ± 0.9% at the paper's N=10,000**, and cite the range "
-      "as a scale-sensitivity note, not as four independent results.")
+      "−56.6% (20k). These are original-model results, not the poster's scale "
+      "validation. For the poster at N=10,000 use the corrected "
+      "**91.4 ± 1.4% reduction** in [POSTER_DATA.md](POSTER_DATA.md).")
     A("")
     A("**Bounding artifact — do not read below ~10k as load-driven.** peak_MW ≈ 4.10 MW "
       "at *both* N=1,000 and N=5,000 (see the table above: 4.104 vs 4.1054, a 0.03% "
       "difference across a 5× fleet). That is a fixed model-startup inrush, not load, so "
-      "CV / nadir / ROCOF wobble non-monotonically below ~10k. The clean, load-driven "
-      "regime is **10k–20k**: below it the startup transient dominates, above it the grid "
-      "diverges.")
+      "CV / nadir / ROCOF wobble non-monotonically below ~10k. The fixed operating "
+      "point also biases the 10k–20k results; no part of this original sweep "
+      "should be treated as corrected by choosing a larger fleet.")
     A("")
     A("**RREI is flat at 231,135.7/yr for every N** (`grid_vs_count.csv`) — it is the "
       "t=0 exceedance annualized over the same trace duration, unchanged by fleet size. "
@@ -479,12 +478,12 @@ def build():
     # ---- 4. per workload
     A("## 4. Per-workload breakdown")
     A("")
-    A("Source: `data/summary/matrix.csv` (48 rows: 4 runs × 3 workloads × 3 "
+    A("Source: `data/summary/matrix.csv` (36 rows: 4 runs × 3 workloads × 3 "
       "mitigations), re-aggregated here to mean ± SD over the 4 runs **within** each "
       "workload. This is where the averages in §1 hide structure.")
     A("")
-    A("Workloads: **hpl** = dense AVX-512 LINPACK (flat plateau); **aisim2** = bursty "
-      "AI-training envelope (idle↔full REST/PREFILL, seed-pinned); **step** = duty-cycled "
+    A("Workloads: **hpl** = dense AVX-512 LINPACK with an imposed 18 s busy / 3 s pause cycle; **aisim2** = bursty "
+      "inference-style envelope (idle↔full REST/PREFILL, seed-pinned); **step** = duty-cycled "
       "scalar load.")
     A("")
     for col, label in [("cv_pct", "CV"), ("energy_pct", "energy"),
@@ -498,22 +497,15 @@ def build():
             hm = float(sb[s][col]); hsd = float(sb[s][col + "_sd"])
             A(f"| **{DISPLAY[s]}** | {cells} | {pm(hm, hsd)} |")
         A("")
-    A("**What to say about each row:**")
+    A("**Interpretation after correction:**")
     A("")
-    A(f"- **ramp.c flattens everything** — CV {pm(*pw[('hpl','rampc')]['cv_pct'])}% (hpl), "
-      f"{pm(*pw[('aisim2','rampc')]['cv_pct'])}% (aisim2), "
-      f"{pm(*pw[('step','rampc')]['cv_pct'])}% (step). Not workload-specific; the "
-      "headline is a real average, not an artifact of one cell.")
-    A(f"- **The usage governor's +15% CV is one cell.** aisim2 "
-      f"{pm(*pw[('aisim2','usagegov')]['cv_pct'])}% vs hpl "
-      f"{pm(*pw[('hpl','usagegov')]['cv_pct'])}% and step "
-      f"{pm(*pw[('step','usagegov')]['cv_pct'])}%. It reacts badly to sharp bursts. "
-      "Report the cell, not the average.")
-    A(f"- **The power smoother does not act.** CV {pm(*pw[('hpl','powersmoother')]['cv_pct'])}% / "
-      f"{pm(*pw[('aisim2','powersmoother')]['cv_pct'])}% / "
-      f"{pm(*pw[('step','powersmoother')]['cv_pct'])}% — every cell within ~2 SD of zero. "
-      "(README.md §3 says \"≈0% on all three\"; the aisim2 cell is nominally +7.0 ± 3.8%, "
-      "which is ≈2 SD — call it 'no measurable smoothing', not 'exactly zero'.)")
+    A("The CV rows above retain the original model artifacts. Corrected "
+      "per-workload CV changes are in `data/summary/rescored/scoreboard.csv`. "
+      "At 30 s, ramp & fill reduces CV on HPL, aisim2, and step by 93.1%, "
+      "84.7%, and 96.3%; the governor by 33.3%, 25.5%, and 4.8%; the power "
+      "smoother by 9.2%, 2.0%, and 13.5%. Read each with the run-to-run SD "
+      "in that CSV. Original full-trace cost rows remain applicable.")
+    A("")
     A(f"- **ramp.c's cost is worst where the baseline idles most.** aisim2 energy "
       f"{pm(*pw[('aisim2','rampc')]['energy_pct'])}% vs hpl "
       f"{pm(*pw[('hpl','rampc')]['energy_pct'])}% — ramp.c holds ballast at 100% "
@@ -522,7 +514,7 @@ def build():
     A("### Delivered throughput — sustained HPL Gflops (hpl only, n=4)")
     A("")
     A("Source: `data/runs/run{1..4}/hpl_*.log`, the HPL `WR*` summary line, parsed "
-      "by this script. **This number appears in no other table in the repo** "
+      "by this script and also reported in the original paper, Table 21. "
       "(`data/sweep_meta.csv` does not exist, so `score_all.sh` never passed `--gflops` "
       "for the clean matrix). It is the only *useful-work* metric available: runtime and "
       "energy say what the mitigation spends, this says what it delivers.")
@@ -581,7 +573,7 @@ def build():
     A("")
 
     # ---- 5. figures
-    A("## 5. Figure index")
+    A("## 5. Original paper figure index")
     A("")
     A("All in `figures/` (regenerate: "
       "`python3 figures/make_figures.py`). One claim each; the "
@@ -606,7 +598,7 @@ def build():
          "Fleet PCC power (post-UPS, 10,000 servers) ripples under baseline and is flat under ramp.c — what the grid actually sees.",
          "§1 absolute table, PCC mean/peak MW"),
         ("scoreboard.png", "The headline result, quantified with error bars.",
-         "Four believable metrics × 3 mitigations, n=4 error bars: ramp.c is the only mitigation that reduces CV.",
+         "Original-model grid and full-trace cost metrics, n=4 error bars. Its CV conclusions are superseded by the poster.",
          "§1, all cells"),
         ("tradeoff.png", "Flatness is bought, not free.",
          "Cost (energy) vs benefit (CV reduction): ramp.c sits alone in the high-benefit corner at high cost; the other two sit at or below zero benefit.",
@@ -618,7 +610,7 @@ def build():
          "Each of the 4 runs as a dot for CV / runtime / energy: CV clusters tightly, cost carries the spread.",
          "§1 ± columns; §6 note on run 3"),
         ("all_metrics.png", "Nothing is hidden — but not everything is trustworthy.",
-         "All 12 grid+cost metrics grouped by trust tier (y-axis inverted, up = better), with the detector tier explicitly marked not-yet-scored.",
+         "Original grid+cost metrics grouped by diagnostic tier, with absolute detector scores from the separate collection.",
          "§2 full table"),
         ("overlay_powersmoother.png", "The power smoother barely acts.",
          "Baseline vs power smoother on the raw trace — the two curves are nearly coincident, which is why its CV is within noise.",
@@ -649,14 +641,14 @@ def build():
               "and 12 drops total.",
          "The measured answer is that the detector does not lead — recall 33%, precision "
          "19%, median lead −0.23 s, i.e. after the transition and inside the ±0.5 s anchor "
-         "uncertainty, so the detector adds nothing the actuator was not already doing.",
+         "uncertainty. This does not establish advance warning or isolate the detector's "
+         "incremental benefit, because the scored events are actuator actions.",
          "Emit phase markers from hpl/step, and add a timestamp field to "
          "`usage_edge`'s JSONL so the detector can be scored separately from the actuator."),
-        ("2", "**Warm-up rescore not run.** Every number here is `WARMUP_S=0`.",
-         "ROCOF / NRS / nadir / sag depth (4 of 12 metrics) are t=0-dominated and "
-         "currently unusable in either direction. Prior sweeps suggest ramp.c *reduces* "
-         "ROCOF 62–94% once t=0 is excluded — a potentially major, currently uncitable result.",
-         "`WARMUP_S=45 scripts/score_all.sh` + a supplementary table/figure."),
+        ("2", "**Grid rescore completed in October 2026.** Original tables here retain zero warm-up.",
+         "The poster uses a per-trace operating point, settled frequency response, "
+         "and 30 s warm-up; a 45 s sensitivity check is also available.",
+         "Use `analysis/rescore_warm.py`, `data/summary/rescored/`, and [POSTER_DATA.md](POSTER_DATA.md)."),
         ("3", "**One aisim2 schedule seed** (3555822270), pinned across all 4 runs.",
          "The n=4 bars measure *system* variance only. Generalization beyond one schedule "
          "is unmeasured.",
@@ -669,10 +661,10 @@ def build():
          "in this repo.",
          "Restore the sync_fraction path and re-run the matrix at "
          "sf = 0/0.25/0.5/0.75/1.0."),
-        ("5", "**N > 20,000 is unreachable**, not merely unmeasured.",
-         "Caps the claim: results are for a datacenter that fits inside a 50 MW weak grid. "
-         "A 100k-server claim needs a larger `S_base_grid`, which changes the whole regime.",
-         "Re-tune `GRID.S_base_grid` / `H_sys` and rebuild the .slx (`scripts/build_model.sh`)."),
+        ("5", "**N > 20,000 has no validated result in this analysis.**",
+         "The original solver failed at 50k and 100k; that failure does not establish "
+         "a physical hosting limit. The corrected sweep covers 1k–20k.",
+         "Investigate model initialization and convergence, and validate any larger-fleet scenario."),
         ("6", "**No dollar cost / tariff analysis.** `analysis/cost_analysis.py` was "
               "deleted (0008af4) and nothing regenerates `cost_analysis.png`.",
          "Energy % is a physical cost, not a bill. Demand-charge framing is absent.",
@@ -700,9 +692,11 @@ def build():
     A("")
 
     # ---- 7. discrepancies
-    A("## 7. Discrepancies found between docs and data")
+    A("## 7. Historical documentation audit")
     A("")
-    A("Checked while deriving the tables above. Nothing here was silently resolved.")
+    A("The entries below record the earlier paper audit; references to README section "
+      "numbers and wording describe those historical revisions. Current poster "
+      "findings are in POSTER_DATA.md.")
     A("")
     A("| # | where | doc says | CSV says | resolution |")
     A("|---|---|---|---|---|")
@@ -752,12 +746,10 @@ def build():
       "the README implies. **FIXED 2026-07-27** — `data/README.md` now quotes the n=4 "
       "full-trace means with SDs and the 1.9× ordering, and records the old n=1 "
       "figures as superseded. |")
-    A("| D5 | `README.md` §4 / `figures/README.md` | \"The pipeline emits "
-      "**12** grid + cost metrics\" / \"**All 12**\" | `rank_all.py` `METRICS` has 12 "
-      "scored rows **+ 4 detector rows** = 16 rows in `full_ranking.csv` | Consistent "
-      "once you read \"12 scored + 4 pending\". **FIXED 2026-07-27** — both files now say "
-      "\"12 scored\", and `README.md` §4 names the 4 pending detector rows and the "
-      "16-row total explicitly. |")
+    A("| D5 | `README.md` / `figures/README.md` | 12 grid/cost metrics | "
+      "`rank_all.py` emits 12 grid/cost rows plus four detector rows | "
+      "Detector rows were subsequently scored on the separate aisim2 collection. "
+      "Current output contains 12 grid/cost rows and four absolute detector scores. |")
     A("| D6 | `README.md` TL;DR | ramp.c costs \"~2.2× wall-time (+121%) and ~2.6× energy "
       "(+161%)\" | +121.1 ± 5.7% → 2.21×; +161.0 ± 6.7% → 2.61× | ✅ agrees. |")
     A("| D7 | `README.md` §2 per-workload cost table | hpl +89% / +91%, aisim2 +136% / "
@@ -771,10 +763,11 @@ def build():
       "is the fixed startup inrush\" | 4.1040 (1k) vs 4.1054 (5k) | ✅ agrees, and it is "
       "a strong artifact signal: a 5× fleet moves peak by 0.03%. |")
     A("")
-    A("### Numbers that are *consistent* across every source checked")
+    A("### Consistency within original-model outputs")
     A("")
     A(f"- ramp.c CV **−68.8 ± 0.9%** at N=10,000: `scoreboard.csv`, `full_ranking.csv`, "
-      f"`sweep/scoreboard_N10000.csv`, `summary.md`, `sweep/summary.md`, `README.md`.")
+      f"`sweep/scoreboard_N10000.csv` and the original summary tables. This is superseded "
+      "by the poster's 91.4 ± 1.4% reduction, not a claim of agreement with current documentation.")
     A(f"- `n_exceedances_in_trace == 1` and `RREI == YEAR/duration` in **{nchk}/{nchk}** "
       f"N=10,000 runs ({bad} violations) — recomputed here, not taken on faith.")
     A("- Fleet-size non-convergence at N=50,000 / 100,000: `sweep/summary.md` only "

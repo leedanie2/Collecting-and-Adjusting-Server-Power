@@ -23,8 +23,8 @@ All ± are **run-to-run SD across the 4 repeat collections** (system variance), 
 | droop / damping / gov | R = 0.05, D = 1, `tau_gov` = 20 s | `readscript.m` (unchanged since 2026-07-13 retune) |
 | ramp limit | 0.333 MW/s (= 20 MW/min, Southern Company large-load cap) | `analysis/grid_metrics.py:31` |
 | LOLE target | 0.1 days/yr (NERC 1-in-10) | `grid_metrics.py:33` |
-| under-freq threshold | 59.3 Hz (−0.7 Hz, NERC BAL-003 relay) | `grid_metrics.py:34` |
-| voltage sag threshold | 0.95 pu (IEEE 1159) | `grid_metrics.py:35` |
+| under-freq threshold | 59.3 Hz (study reference; NERC context) | `grid_metrics.py:34` |
+| voltage sag threshold | 0.95 pu (study reference; see POSTER_DATA.md) | `grid_metrics.py:35` |
 | metric resample | uniform 0.1 s (matches RAPL cadence) | `grid_metrics.py:60` |
 | warm-up discarded | **0 s** — every number here includes the t=0 fleet cold start | `grid_metrics.py` `WARMUP_S=0.0` |
 | aisim2 schedule seed | 3555822270 (pinned, so repeats measure system variance) | `README.md` §setup |
@@ -32,15 +32,15 @@ All ± are **run-to-run SD across the 4 repeat collections** (system variance), 
 
 **Cost vs risk use different traces on purpose.** Runtime and energy are the **full untrimmed** single-node trace (ramp.c's ballast flanks are real wall-time and real energy). CV / peak / all grid metrics are the **plateau-trimmed** trace pushed through the sim (`scripts/trim_auto.py`), because there the ballast is an annualization artifact. Source: `analysis/summarize_n4.py` docstring.
 
-## 1. Headline numbers
+## 1. Original paper numbers (grid conclusions superseded)
 
 Source: `data/summary/scoreboard.csv` (← `analysis/summarize_n4.py`); per-cell backing `data/summary/matrix.csv`. % vs the same workload's baseline, averaged over 3 workloads within a run, then mean ± SD over the 4 runs.
 
-| mitigation | CV (flatness) | peak-to-mean | runtime | energy | survives scrutiny? |
+| mitigation | CV (flatness) | peak-to-mean | runtime | energy | interpretation |
 |---|---|---|---|---|---|
-| **ramp.c** | -68.8 ± 0.9% | -5.1 ± 0.3% | +121.1 ± 5.7% | +161.0 ± 6.7% | **CV: real** (76× its SD, same sign in all 3 workloads and all 4 fleet sizes). peak/runtime/energy: real. |
-| **power smoother** | +0.6 ± 1.9% | -0.4 ± 0.0% | +3.5 ± 0.2% | +7.4 ± 0.6% | **CV: within-noise** (+0.6 ± 1.9 — do not report as a reduction *or* an increase). peak −0.4%: real but negligible. cost: real, small. |
-| **usage governor** | +15.4 ± 7.6% | -0.8 ± 0.3% | +1.1 ± 1.9% | +11.6 ± 1.5% | **CV: worsens at warm-up 0, improves at warm-up 45 s.** The +15% is dominated by the ballast pool's t=0 spin-up; excluding 45 s it becomes −28.1 ± 12.2%. Do not quote either number without saying which. cost: real, small. |
+| **ramp.c** | -68.8 ± 0.9% | -5.1 ± 0.3% | +121.1 ± 5.7% | +161.0 ± 6.7% | Original grid result; corrected poster CV reduction is 91.4 ± 1.4%. Full-trace costs still apply. |
+| **power smoother** | +0.6 ± 1.9% | -0.4 ± 0.0% | +3.5 ± 0.2% | +7.4 ± 0.6% | Original grid result; corrected poster CV reduction is 8.2 ± 3.5%. Full-trace costs still apply. |
+| **usage governor** | +15.4 ± 7.6% | -0.8 ± 0.3% | +1.1 ± 1.9% | +11.6 ± 1.5% | Original grid result; corrected poster CV reduction is 21.2 ± 12.7% at 30 s, or 28.2 ± 12.1% at 45 s. Full-trace costs still apply. |
 
 Negative is better for CV / peak / runtime; energy is a cost either way. A fifth cost dimension — **delivered HPL throughput** — is in §4: ramp.c also gives up 15.5% of sustained Gflops.
 
@@ -88,8 +88,8 @@ Source: `data/summary/full_ranking.csv` (← `analysis/rank_all.py`); definition
 
 | metric | unit | dir | plain English | tier | ramp.c | power smoother | slew gov | use it? |
 |---|---|---|---|---|---|---|---|---|
-| CV | dimensionless | lower | SD/mean of fleet PCC power — flatness | `direct` | -68.8 ± 0.9 | +0.6 ± 1.9 | +15.4 ± 7.6 | **YES — the headline metric** |
-| peak-to-mean | dimensionless | lower | max/mean of PCC power — headroom the utility must hold | `direct` | -5.1 ± 0.3 | -0.4 ± 0.0 | -0.8 ± 0.3 | yes |
+| CV | dimensionless | lower | SD/mean of fleet PCC power — flatness | `direct` | -68.8 ± 0.9 | +0.6 ± 1.9 | +15.4 ± 7.6 | use corrected poster CV |
+| peak-to-mean | dimensionless | lower | max/mean of PCC power — headroom the utility must hold | `direct` | -5.1 ± 0.3 | -0.4 ± 0.0 | -0.8 ± 0.3 | original analysis only |
 | runtime | s | lower | wall-clock of the full untrimmed trace | `perf` | +121.1 ± 5.7 | +3.5 ± 0.2 | +1.1 ± 1.9 | yes (cost) |
 | energy | J | lower | ∫P dt over the full untrimmed trace | `perf` | +161.0 ± 6.7 | +7.4 ± 0.6 | +11.6 ± 1.5 | yes (cost) |
 | ROCOF | Hz/s | lower | max \|df/dt\| from the swing equation | `coldstart` | +81.3 ± 2.4 | +6.0 ± 1.4 | -1.1 ± 2.3 | **NO as-is** — t=0 artifact |
@@ -127,7 +127,7 @@ Source: `data/summary/sweep/grid_vs_count.csv`, `scoreboard_N*.csv`, `sweep/summ
 | 50,000 | ~37 | ~0.74 | — | **solver diverged** | — | — | — |
 | 100,000 | ~74 | ~1.47 | — | **solver diverged** | — | — | — |
 
-**Constraint, state it as one:** the model has a hard upper bound at **N ≈ 20,000 servers on a 50 MW grid**. At N=50,000 (~37 MW) and N=100,000 (~74 MW) the phasor solver fails at t ≈ 0.001 s — the weak grid physically cannot host the fleet, this is not "degraded metrics". Voltage crosses the 0.95 pu NERC/IEEE sag limit by N=10,000 and craters to 0.8924 pu at N=20,000; frequency nadir falls to 56.56 Hz, far below the 59.3 Hz under-frequency relay threshold.
+**Historical solver limitation:** the original phasor runs at N=50,000 and N=100,000 fail near t = 0.001 s. Non-convergence alone does not establish a physical hosting limit. The fixed operating point affects the frequency results throughout this table. The corrected sweep in [POSTER_DATA.md](POSTER_DATA.md) gives worst baseline voltage 0.9488 pu at 10,000 servers and 0.8826 pu at 20,000, with frequency nadir 59.654 Hz at 20,000. Voltage crosses the study threshold first.
 
 Load scaling itself is exact (mean MW ∝ N):
 
@@ -138,7 +138,7 @@ Load scaling itself is exact (mean MW ∝ N):
 | 10,000 | 7.3606 | 0.7361 |
 | 20,000 | 14.7181 | 0.7359 |
 
-All N-dependence above is nonlinear **grid response**, as intended.
+These original grid metrics also depend on startup and fixed-operating-point artifacts.
 
 ### Does ramp.c still win at every scale? (CV %, n=4)
 
@@ -148,17 +148,17 @@ All N-dependence above is nonlinear **grid response**, as intended.
 | **power smoother** | -3.9 ± 0.7% | +0.4 ± 1.9% | +0.6 ± 1.9% | +0.3 ± 1.6% |
 | **usage governor** | +14.8 ± 2.3% | +27.1 ± 4.1% | +15.4 ± 7.6% | +32.5 ± 4.3% |
 
-ramp.c wins CV at **every solvable scale** — the ranking is robust to fleet size. The *magnitude* is not: it swings −18.7% (1k) → −91.8% (5k) → −68.8% (10k) → −56.6% (20k). Quote **−68.8 ± 0.9% at the paper's N=10,000**, and cite the range as a scale-sensitivity note, not as four independent results.
+ramp.c wins CV at **every solvable scale** — the ranking is robust to fleet size. The *magnitude* is not: it swings −18.7% (1k) → −91.8% (5k) → −68.8% (10k) → −56.6% (20k). These are original-model results, not the poster's scale validation. For the poster at N=10,000 use the corrected **91.4 ± 1.4% reduction** in [POSTER_DATA.md](POSTER_DATA.md).
 
-**Bounding artifact — do not read below ~10k as load-driven.** peak_MW ≈ 4.10 MW at *both* N=1,000 and N=5,000 (see the table above: 4.104 vs 4.1054, a 0.03% difference across a 5× fleet). That is a fixed model-startup inrush, not load, so CV / nadir / ROCOF wobble non-monotonically below ~10k. The clean, load-driven regime is **10k–20k**: below it the startup transient dominates, above it the grid diverges.
+**Bounding artifact — do not read below ~10k as load-driven.** peak_MW ≈ 4.10 MW at *both* N=1,000 and N=5,000 (see the table above: 4.104 vs 4.1054, a 0.03% difference across a 5× fleet). That is a fixed model-startup inrush, not load, so CV / nadir / ROCOF wobble non-monotonically below ~10k. The fixed operating point also biases the 10k–20k results; no part of this original sweep should be treated as corrected by choosing a larger fleet.
 
 **RREI is flat at 231,135.7/yr for every N** (`grid_vs_count.csv`) — it is the t=0 exceedance annualized over the same trace duration, unchanged by fleet size. Confirms §2's degeneracy argument from a second direction.
 
 ## 4. Per-workload breakdown
 
-Source: `data/summary/matrix.csv` (48 rows: 4 runs × 3 workloads × 3 mitigations), re-aggregated here to mean ± SD over the 4 runs **within** each workload. This is where the averages in §1 hide structure.
+Source: `data/summary/matrix.csv` (36 rows: 4 runs × 3 workloads × 3 mitigations), re-aggregated here to mean ± SD over the 4 runs **within** each workload. This is where the averages in §1 hide structure.
 
-Workloads: **hpl** = dense AVX-512 LINPACK (flat plateau); **aisim2** = bursty AI-training envelope (idle↔full REST/PREFILL, seed-pinned); **step** = duty-cycled scalar load.
+Workloads: **hpl** = dense AVX-512 LINPACK with an imposed 18 s busy / 3 s pause cycle; **aisim2** = bursty inference-style envelope (idle↔full REST/PREFILL, seed-pinned); **step** = duty-cycled scalar load.
 
 ### CV (% vs baseline)
 
@@ -192,16 +192,15 @@ Workloads: **hpl** = dense AVX-512 LINPACK (flat plateau); **aisim2** = bursty A
 | **power smoother** | -0.4 ± 0.2 | -0.5 ± 0.3 | -0.4 ± 0.1 | -0.4 ± 0.0 |
 | **usage governor** | -0.5 ± 0.3 | -1.4 ± 0.8 | -0.3 ± 0.1 | -0.8 ± 0.3 |
 
-**What to say about each row:**
+**Interpretation after correction:**
 
-- **ramp.c flattens everything** — CV -76.0 ± 3.2% (hpl), -64.1 ± 0.8% (aisim2), -66.5 ± 0.4% (step). Not workload-specific; the headline is a real average, not an artifact of one cell.
-- **The usage governor's +15% CV is one cell.** aisim2 +53.6 ± 19.1% vs hpl -8.7 ± 6.4% and step +1.3 ± 0.9%. It reacts badly to sharp bursts. Report the cell, not the average.
-- **The power smoother does not act.** CV -3.9 ± 4.9% / +7.0 ± 3.8% / -1.3 ± 3.9% — every cell within ~2 SD of zero. (README.md §3 says "≈0% on all three"; the aisim2 cell is nominally +7.0 ± 3.8%, which is ≈2 SD — call it 'no measurable smoothing', not 'exactly zero'.)
+The CV rows above retain the original model artifacts. Corrected per-workload CV changes are in `data/summary/rescored/scoreboard.csv`. At 30 s, ramp & fill reduces CV on HPL, aisim2, and step by 93.1%, 84.7%, and 96.3%; the governor by 33.3%, 25.5%, and 4.8%; the power smoother by 9.2%, 2.0%, and 13.5%. Read each with the run-to-run SD in that CSV. Original full-trace cost rows remain applicable.
+
 - **ramp.c's cost is worst where the baseline idles most.** aisim2 energy +218.8 ± 23.0% vs hpl +90.9 ± 7.2% — ramp.c holds ballast at 100% through aisim2's idle dips.
 
 ### Delivered throughput — sustained HPL Gflops (hpl only, n=4)
 
-Source: `data/runs/run{1..4}/hpl_*.log`, the HPL `WR*` summary line, parsed by this script. **This number appears in no other table in the repo** (`data/sweep_meta.csv` does not exist, so `score_all.sh` never passed `--gflops` for the clean matrix). It is the only *useful-work* metric available: runtime and energy say what the mitigation spends, this says what it delivers.
+Source: `data/runs/run{1..4}/hpl_*.log`, the HPL `WR*` summary line, parsed by this script and also reported in the original paper, Table 21. (`data/sweep_meta.csv` does not exist, so `score_all.sh` never passed `--gflops` for the clean matrix). It is the only *useful-work* metric available: runtime and energy say what the mitigation spends, this says what it delivers.
 
 | condition | HPL solve (s) | sustained Gflops | % vs baseline |
 |---|---|---|---|
@@ -256,7 +255,7 @@ Same aggregation, from `metrics.json`. Included so nobody re-derives them and mi
 
 The residual RREI "improvements" are entirely leftover duration mismatch after `trim_auto.py`: aisim2×ramp.c (-10.3 ± 1.7%) is the worst-matched pair (+11.5% longer), step×ramp.c (-1.4 ± 2.0%) the best-matched. Nothing here is ramp-risk reduction. Note this also means the **power smoother's hpl RREI -9.4 ± 0.5%** is not a safety improvement — it is the smoother making HPL run 10% longer.
 
-## 5. Figure index
+## 5. Original paper figure index
 
 All in `figures/` (regenerate: `python3 figures/make_figures.py`). One claim each; the numbers cross-reference §1.
 
@@ -266,11 +265,11 @@ All in `figures/` (regenerate: `python3 figures/make_figures.py`). One claim eac
 | `overlay_rampc.png` | ramp.c changes the single-node power shape. | Against baseline on all three workloads, ramp.c replaces the workload's excursions with a held plateau, bracketed by the di/dt ramp legs (shown untrimmed, plateau-aligned). | single-node table §1; runtime +121.1 ± 5.7% |
 | `distribution.png` | The flatness is distributional, not a smoothed line. | Single-node power histograms: baseline is spread, ramp.c collapses to a tight peak — this is the mechanism behind the CV number. | CV -68.8 ± 0.9% |
 | `pcc_timeseries.png` | The flatness survives the fleet model. | Fleet PCC power (post-UPS, 10,000 servers) ripples under baseline and is flat under ramp.c — what the grid actually sees. | §1 absolute table, PCC mean/peak MW |
-| `scoreboard.png` | The headline result, quantified with error bars. | Four believable metrics × 3 mitigations, n=4 error bars: ramp.c is the only mitigation that reduces CV. | §1, all cells |
+| `scoreboard.png` | The headline result, quantified with error bars. | Original-model grid and full-trace cost metrics, n=4 error bars. Its CV conclusions are superseded by the poster. | §1, all cells |
 | `tradeoff.png` | Flatness is bought, not free. | Cost (energy) vs benefit (CV reduction): ramp.c sits alone in the high-benefit corner at high cost; the other two sit at or below zero benefit. | CV -68.8 ± 0.9% vs energy +161.0 ± 6.7% |
 | `per_workload.png` | The averages hide structure. | CV and energy split per workload — exposes the slew governor's aisim2 blowup and ramp.c's ~3.2× aisim2 energy that the 3-workload mean flattens. | §4 tables |
 | `reproducibility.png` | The claim does not rest on a lucky run. | Each of the 4 runs as a dot for CV / runtime / energy: CV clusters tightly, cost carries the spread. | §1 ± columns; §6 note on run 3 |
-| `all_metrics.png` | Nothing is hidden — but not everything is trustworthy. | All 12 grid+cost metrics grouped by trust tier (y-axis inverted, up = better), with the detector tier explicitly marked not-yet-scored. | §2 full table |
+| `all_metrics.png` | Nothing is hidden — but not everything is trustworthy. | Original grid+cost metrics grouped by diagnostic tier, with absolute detector scores from the separate collection. | §2 full table |
 | `overlay_powersmoother.png` | The power smoother barely acts. | Baseline vs power smoother on the raw trace — the two curves are nearly coincident, which is why its CV is within noise. | CV +0.6 ± 1.9% |
 | `overlay_usagegov.png` | The usage governor is asymmetric by design. | Baseline vs usage governor: it limits ramp-up but fills falls with ballast (ship config `--no-engage-on-dips`), which is why it adds energy without flattening at warm-up 0. | energy +11.6 ± 1.5%; CV +15.4 ± 7.6% |
 
@@ -282,20 +281,20 @@ No figure exists for the fleet-size sweep (§3) — that data is table-only (`da
 
 | # | gap | why it matters | what would close it |
 |---|---|---|---|
-| 1 | **Detector metrics — SCORED 2026-07-28, on aisim2 only.** hpl and step emit no phase log, so ground truth exists for 1 of 3 workloads: 12 rises and 12 drops total. | The measured answer is that the detector does not lead — recall 33%, precision 19%, median lead −0.23 s, i.e. after the transition and inside the ±0.5 s anchor uncertainty, so the detector adds nothing the actuator was not already doing. | Emit phase markers from hpl/step, and add a timestamp field to `usage_edge`'s JSONL so the detector can be scored separately from the actuator. |
-| 2 | **Warm-up rescore not run.** Every number here is `WARMUP_S=0`. | ROCOF / NRS / nadir / sag depth (4 of 12 metrics) are t=0-dominated and currently unusable in either direction. Prior sweeps suggest ramp.c *reduces* ROCOF 62–94% once t=0 is excluded — a potentially major, currently uncitable result. | `WARMUP_S=45 scripts/score_all.sh` + a supplementary table/figure. |
+| 1 | **Detector metrics — SCORED 2026-07-28, on aisim2 only.** hpl and step emit no phase log, so ground truth exists for 1 of 3 workloads: 12 rises and 12 drops total. | The measured answer is that the detector does not lead — recall 33%, precision 19%, median lead −0.23 s, i.e. after the transition and inside the ±0.5 s anchor uncertainty. This does not establish advance warning or isolate the detector's incremental benefit, because the scored events are actuator actions. | Emit phase markers from hpl/step, and add a timestamp field to `usage_edge`'s JSONL so the detector can be scored separately from the actuator. |
+| 2 | **Grid rescore completed in October 2026.** Original tables here retain zero warm-up. | The poster uses a per-trace operating point, settled frequency response, and 30 s warm-up; a 45 s sensitivity check is also available. | Use `analysis/rescore_warm.py`, `data/summary/rescored/`, and [POSTER_DATA.md](POSTER_DATA.md). |
 | 3 | **One aisim2 schedule seed** (3555822270), pinned across all 4 runs. | The n=4 bars measure *system* variance only. Generalization beyond one schedule is unmeasured. | A deliberate seed sweep, reported as a separate spread. |
 | 4 | **Diverse-fleet aggregation not in the headline.** All results are `worst_case` (100% in-phase). | It is an upper bound. A partial-synchrony (`sync_fraction`) break-even sweep was prototyped earlier but the n=4 matrix was never run through it, so `readscript.m` here is worst-case only and the machinery is not in this repo. | Restore the sync_fraction path and re-run the matrix at sf = 0/0.25/0.5/0.75/1.0. |
-| 5 | **N > 20,000 is unreachable**, not merely unmeasured. | Caps the claim: results are for a datacenter that fits inside a 50 MW weak grid. A 100k-server claim needs a larger `S_base_grid`, which changes the whole regime. | Re-tune `GRID.S_base_grid` / `H_sys` and rebuild the .slx (`scripts/build_model.sh`). |
+| 5 | **N > 20,000 has no validated result in this analysis.** | The original solver failed at 50k and 100k; that failure does not establish a physical hosting limit. The corrected sweep covers 1k–20k. | Investigate model initialization and convergence, and validate any larger-fleet scenario. |
 | 6 | **No dollar cost / tariff analysis.** `analysis/cost_analysis.py` was deleted (0008af4) and nothing regenerates `cost_analysis.png`. | Energy % is a physical cost, not a bill. Demand-charge framing is absent. | Re-add a tariff model, or drop the economic framing from the paper. |
 | 7 | **Gflops/W (Green500) is unscored** — but raw Gflops is now recovered (§4). `data/sweep_meta.csv` **does not exist** in this repo, so `score_all.sh` never passed `--gflops` and no `metrics.json` has an `efficiency` block. | Gflops/W is the natural "is the mitigation worth it" ratio and the field's standard efficiency unit; without it the cost story is watts and seconds only. Half-closed: §4 now has sustained Gflops per condition. | Feed the §4 Gflops into `grid_metrics.py --gflops` and rescore, or write the missing `data/sweep_meta.csv`. |
 | 8 | **aisim2 load-generator jitter** (scalar Python `math.*` across 128 procs). | Its PREFILL bursts are jagged by construction, which inflates baseline CV and hence every aisim2 percentage. | A/B `ai_sim_2.py --kernel numpy` on mycroft before adopting. |
 
 **Known outlier, kept:** run 3 is a mild outlier (its `hpl` governor cell flips sign). It was kept rather than cherry-picked; dropping it tightens every bar and changes no conclusion (ramp.c CV → −69.3 ± 0.4). Source: `README.md` §5; the per-cell values are in `matrix.csv`.
 
-## 7. Discrepancies found between docs and data
+## 7. Historical documentation audit
 
-Checked while deriving the tables above. Nothing here was silently resolved.
+The entries below record the earlier paper audit; references to README section numbers and wording describe those historical revisions. Current poster findings are in POSTER_DATA.md.
 
 | # | where | doc says | CSV says | resolution |
 |---|---|---|---|---|
@@ -303,14 +302,14 @@ Checked while deriving the tables above. Nothing here was silently resolved.
 | D2 | `README.md` §3 | "The power smoother is flat everywhere (≈0% CV on all three)" | hpl −3.9 ± 4.9%, aisim2 **+7.0 ± 3.8%**, step −1.3 ± 3.9% | **FIXED 2026-07-27.** Was defensible but loose — the aisim2 cell is ~1.8 SD from zero, not ≈0. §3 now reads "moves nothing measurable: no cell is distinguishable from zero at n=4", with all three cells and their SDs inline. |
 | D3 | `scripts/nrun_pipeline.sh` | header and loops said **3 runs** (`for r in 1 2 3`, `results/*_r[123]_worst`, "n=3 scoreboard") | four runs exist (`data/runs/run{1,2,3,4}`, 48 `_r[1-4]_worst` results dirs) and `summarize_n4.py` sets `RUNS=[1,2,3,4]` | **FIXED 2026-07-27.** Loop → `1 2 3 4`, glob → `_r[1234]_worst` (matches all 48 dirs), header → 4 runs / 48 traces; `analysis/summarize_n3.py` renamed to `summarize_n4.py` (it already had `RUNS=[1,2,3,4]` inside — only the name lied) and all references updated. The committed script now reproduces the committed n=4 results; run 4 had been added by hand. |
 | D4 | `data/README.md` "Known gaps" | hpl clean durations "196 / 240 / 209 / 219 s for baseline / powersmoother / rampc / slewgov", "the ordering tracks intervention strength" | Those are the **n=1** `data/runs/run<N>/hpl_*.csv` set (197.3 / 241.6 / 209.8 / 220.1 s), and the 209.8 s rampc figure is the **trimmed** trace while the other three are untrimmed. Untrimmed hpl_rampc is **372.5 s**. n=4 full-trace means: baseline 213.8 ± 11.0 s, powersmoother 236.0 ± 10.9 s, rampc 403.1 ± 23.1 s, usagegov 220.2 ± 0.1 s | Two problems: (a) n=1, and the quoted baseline (196 s) is run 3, the outlier — the other three runs are ~219 s, n=4 mean 213.8 ± 11.0 s; (b) the ordering claim is built from a mixed trimmed/untrimmed comparison. On like-for-like full traces the ordering is baseline < usagegov < powersmoother ≪ rampc, which *does* track intervention strength — but by 1.9×, not the 1.06× the README implies. **FIXED 2026-07-27** — `data/README.md` now quotes the n=4 full-trace means with SDs and the 1.9× ordering, and records the old n=1 figures as superseded. |
-| D5 | `README.md` §4 / `figures/README.md` | "The pipeline emits **12** grid + cost metrics" / "**All 12**" | `rank_all.py` `METRICS` has 12 scored rows **+ 4 detector rows** = 16 rows in `full_ranking.csv` | Consistent once you read "12 scored + 4 pending". **FIXED 2026-07-27** — both files now say "12 scored", and `README.md` §4 names the 4 pending detector rows and the 16-row total explicitly. |
+| D5 | `README.md` / `figures/README.md` | 12 grid/cost metrics | `rank_all.py` emits 12 grid/cost rows plus four detector rows | Detector rows were subsequently scored on the separate aisim2 collection. Current output contains 12 grid/cost rows and four absolute detector scores. |
 | D6 | `README.md` TL;DR | ramp.c costs "~2.2× wall-time (+121%) and ~2.6× energy (+161%)" | +121.1 ± 5.7% → 2.21×; +161.0 ± 6.7% → 2.61× | ✅ agrees. |
 | D7 | `README.md` §2 per-workload cost table | hpl +89% / +91%, aisim2 +136% / +219%, step +138% / +173% | hpl +88.6 ± 5.2 / +90.9 ± 7.2, aisim2 +136.3 ± 21.2 / +218.8 ± 23.0, step +138.3 ± 0.8 / +173.3 ± 0.3 | ✅ agrees (rounding only). Note aisim2 runtime carries a ±21.2% SD — the widest bar in the study; do not quote +136% without it. |
 | D8 | `data/summary/sweep/summary.md` | "peak_MW≈4.1 MW at both 1k and 5k is the fixed startup inrush" | 4.1040 (1k) vs 4.1054 (5k) | ✅ agrees, and it is a strong artifact signal: a 5× fleet moves peak by 0.03%. |
 
-### Numbers that are *consistent* across every source checked
+### Consistency within original-model outputs
 
-- ramp.c CV **−68.8 ± 0.9%** at N=10,000: `scoreboard.csv`, `full_ranking.csv`, `sweep/scoreboard_N10000.csv`, `summary.md`, `sweep/summary.md`, `README.md`.
+- ramp.c CV **−68.8 ± 0.9%** at N=10,000: `scoreboard.csv`, `full_ranking.csv`, `sweep/scoreboard_N10000.csv` and the original summary tables. This is superseded by the poster's 91.4 ± 1.4% reduction, not a claim of agreement with current documentation.
 - `n_exceedances_in_trace == 1` and `RREI == YEAR/duration` in **48/48** N=10,000 runs (0 violations) — recomputed here, not taken on faith.
 - Fleet-size non-convergence at N=50,000 / 100,000: `sweep/summary.md` only (no CSV rows exist, by construction — the solver produced no output).
 

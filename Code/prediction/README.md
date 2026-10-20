@@ -102,7 +102,7 @@ the code behind them is kept rather than deleted:
   little, which is why the final detector reads usage rather than more channels.
 - **`exploration/extended_precursor_screen.py`** — the causal screen over
   candidate upstream heuristics, ranked by Cohen's *d*. Run-queue depth is the
-  one signal that genuinely leads a transient.
+  strongest precursor in that screen; this did not establish reliable forecasts.
 - **`exploration/confirmation_backtest.py`** — an explicit negative result:
   a fixed-kernel Hawkes intensity over run-queue arrivals, used as
   corroboration rather than prediction, does not beat the power EWMA on either

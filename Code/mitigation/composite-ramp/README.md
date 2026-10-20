@@ -37,14 +37,19 @@ at `SCHED_IDLE`, cycling busy/idle against a 10 ms period to hold an atomic
 duty-cycle target. Because the primary workload is pinned to the same cores at
 normal priority, the scheduler hands a core to its worker only when the primary
 leaves it idle, and preempts the worker the moment the primary wants it back.
-Power stays flat across the workload's internal dips at close to zero cost to
-the workload itself.
+The workers aim to fill the workload's internal dips while yielding CPU time
+to useful work. Filling consumes additional energy, and neither zero runtime
+cost nor perfectly flat power is guaranteed. The poster's measured ramp & fill
+result is for `ramp.c`: 91.4 ± 1.4% lower grid CV at +121.1 ± 5.7% runtime
+and +161.0 ± 6.7% CPU energy, including ramps. See
+[poster results](../../grid-simulation/POSTER_DATA.md).
 
 **Transitioning** runs between commands. The manager compares the outgoing core
 range to the incoming one and splits the difference into cores leaving, cores
 arriving, and cores common to both. Departures and arrivals are then paired off
 one-for-one: an outgoing worker is stopped as a replacement is created already
-at 100%, so the two cancel and aggregate draw does not move. Only the unpaired
+at 100%, to approximately offset the departure with an arrival; equal worker counts
+do not guarantee equal measured power. Only the unpaired
 remainder is ramped — leftover outgoing cores ramp down to zero and are
 destroyed (highest core first), leftover incoming cores ramp up from idle (one
 at a time, ascending). Ramps close the loop on `/proc/stat`: a core is not

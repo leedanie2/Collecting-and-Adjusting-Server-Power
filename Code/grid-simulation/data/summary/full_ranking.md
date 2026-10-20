@@ -1,6 +1,8 @@
-# Full metric ranking — every grid metric, all four runs
+# Original paper metric ranking — all four runs
 
-% change vs baseline, mean ± SD across 4 runs (lower = better everywhere). **Winner** is the best mitigation for that metric. The *trust* column says whether the ranking means anything — only `direct`/`perf` rows are safe to rank on as-is.
+> Historical grid scores. Use [POSTER_DATA.md](../../POSTER_DATA.md) and [corrected tables](rescored/) for the poster: CV reductions 91.4%, 8.2%, and 21.2% for ramp & fill, power smoother, and governor. Full-trace cost and separate detector scores remain applicable.
+
+% change vs baseline, mean ± SD across 4 runs (lower = better everywhere). **Winner** is the best mitigation for that metric. The *trust* column records the original diagnostic categories; it does not validate the superseded grid conclusions.
 
 | metric | trust | rampc | powersmoother | usagegov | winner |
 |---|---|---|---|---|---|
@@ -29,12 +31,12 @@
 
 ### Trust tags
 
-- **direct** — computed straight from the signal — believe the ranking
+- **direct** — computed from original PCC signals; grid conclusions superseded by corrected poster analysis
 - **perf** — real cost (full trace)
-- **coldstart** — dominated by the model's t=0 cold start; needs WARMUP_S=45 to mean anything
+- **coldstart** — affected by startup and the fixed operating point; trimming alone does not correct both
 - **degenerate** — no signal — one t=0 exceedance per run makes it ~constant
 - **cliff** — count across a threshold both sides sit ~equal distance from
 - **detector** — ABSOLUTE values, not % vs baseline, and only usagegov has a detector — see analysis/score_detector.py. aisim2 only: hpl and step emit no phase log to score against
 
-The headline `scoreboard.csv` ranks on the four `direct`/`perf` rows only. The `coldstart` rows become meaningful with `WARMUP_S=45 scripts/score_all.sh`; `degenerate`/`cliff` rows carry no mitigation signal at worst-case aggregation.
+The original `scoreboard.csv` ranks on the four `direct`/`perf` rows. A warm-up alone does not remove the fixed operating-point error. The poster uses `analysis/rescore_warm.py` with a per-trace operating point and 30 s warm-up (45 s sensitivity check). Detector values come from a separate collection with ±0.5 s phase-anchor uncertainty; they are absolute quantities, not percent changes.
 

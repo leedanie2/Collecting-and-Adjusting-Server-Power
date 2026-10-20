@@ -1,4 +1,10 @@
-# clean set across fleet sizes (n=4)
+# Original Simulink fleet-size sweep (n=4)
+
+> Historical model outputs. Use [POSTER_DATA.md](../../../POSTER_DATA.md)
+> and [corrected sweep](../rescored/sweep.csv) for the poster. The corrected
+> worst baseline voltage is 0.9488 pu at 10,000 servers and 0.8826 pu at
+> 20,000; the frequency nadir at 20,000 is 59.654 Hz. Voltage crosses the
+> study threshold first.
 
 Same clean n=4 traces, worst-case aggregation, pushed through the **fixed 50 MW** grid at each fleet size (`N_servers` override; exact-equivalent to trace-scaling). Load scales linearly with N; grid stress does not.
 
@@ -13,7 +19,11 @@ Same clean n=4 traces, worst-case aggregation, pushed through the **fixed 50 MW*
 | 50000 | ~37 (>0.7) | **solver diverged** | — | — |
 | 100000 | ~74 (>1.5) | **solver diverged** | — | — |
 
-**50000, 100000 servers do not converge** — load (≥40 MW) approaches/exceeds the 50 MW grid; the phasor solver fails at t≈0.001 s. Not degraded metrics: the weak grid physically cannot host that fleet. Voltage crosses the 0.95 NERC sag limit by 10k and craters to 0.89 pu at 20k.
+**50,000 and 100,000-server runs did not converge** in the original phasor
+model near t = 0.001 s. This is a solver limitation; it does not by itself
+establish a physical hosting limit. The table above averages baseline metrics
+over workloads and runs and includes model artifacts. The corrected sweep
+reports worst-case minima, so its aggregation also differs from this table.
 
 ## Does rampc still win on CV at every scale?
 
@@ -22,7 +32,9 @@ Same clean n=4 traces, worst-case aggregation, pushed through the **fixed 50 MW*
 - **N=10000**: top smoother = **rampc** (CV -68.8% ± 0.9)
 - **N=20000**: top smoother = **rampc** (CV -56.6% ± 1.1)
 
-rampc wins at every solvable scale (ranking robust to fleet size).
+Ramp & fill ranks first in this original-model sweep. These values retain
+startup effects and do not establish the corrected benefit at every fleet size.
+The poster reports 91.4 ± 1.4% CV reduction at 10,000 servers.
 
 ## Cost (N-independent — `cost.csv`)
 
@@ -38,7 +50,7 @@ vary with `N_servers` — one table, not one per fleet size. Values mirror
 writes the CSVs, not this prose. The `scoreboard_N*.csv` files
 carry grid metrics only.
 
-## Caveats (two known artifacts bound the trustworthy range)
+## Model artifacts
 - **RREI is flat (~231k/yr) at every N** — it's the t=0 cold-start exceedance annualized (1 exceedance × year/duration), not a load signal. Ignore RREI across this sweep.
-- **Low-N grid metrics are transient-dominated**: peak_MW≈4.1 MW at both 1k and 5k is the fixed startup inrush, not the load — so CV/nadir wobble non-monotonically below ~10k. The clean, load-driven regime is ~10k–20k; below that the startup transient dominates, above it the grid diverges.
-- **Load scaling itself is exact** (mean MW ∝ N to 3 sig figs); all N-dependence here is the nonlinear grid response, as intended.
+- **Low-N grid metrics are transient-dominated**: peak_MW≈4.1 MW at both 1k and 5k is the fixed startup inrush, not the load — so CV/nadir wobble non-monotonically below ~10k. The fixed operating point also biases 10k–20k; those runs are not an artifact-free range.
+- **Load scaling itself is exact** (mean MW ∝ N to 3 sig figs); the original grid metrics additionally reflect startup and operating-point errors.

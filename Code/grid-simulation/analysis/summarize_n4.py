@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""The headline scoreboard: which mitigation wins, with n=4 error bars.
+"""Reproduce the original paper scoreboard and full-trace costs, with n=4 error bars.
+
+Grid conclusions are superseded by rescore_warm.py and POSTER_DATA.md.
 
 The 3x4 matrix was collected four times on a quiesced server (aisim2 schedule
 seed pinned across all runs, so the repeats isolate system variance, not
@@ -145,14 +147,21 @@ def write_csv(rows, out):
 
 
 def write_md(rows, out):
-    L = ["# Which mitigation wins? (n=4, mean ± SD across runs)", "",
+    L = ["# Original paper scoreboard (n=4, mean ± SD across runs)", "",
+         "> Historical grid scores: the October 2026 poster supersedes these CV "
+         "conclusions. Corrected reductions are 91.4% (ramp & fill), 8.2% "
+         "(power smoother), and 21.2% (governor). See "
+         "[POSTER_DATA.md](../../POSTER_DATA.md) and "
+         "[corrected tables](rescored/). Full-trace runtime and energy costs "
+         "below remain applicable.", "",
          "| rank | mitigation | CV | peak | runtime | energy | verdict |",
          "|---|---|---|---|---|---|---|"]
     for r in rows:
         L.append(f"| {r['rank']} | **{r['smoother']}** | {fmt(r,'cv_pct')} | "
                  f"{fmt(r,'peak_pct')} | {fmt(r,'runtime_pct')} | "
                  f"{fmt(r,'energy_pct')} | {verdict(r['cv_pct'], r.get('cv_pct_sd'))} |")
-    L += ["", "Each cell: mean ± standard deviation across four repeat "
+    L += ["", "Each cell: average the three workload comparisons within each run, then "
+          "mean ± sample standard deviation across four repeat "
           "collections of the full 3×4 matrix (quiesced server, aisim2 schedule "
           "seed pinned). Negative = mitigation lower (better) for CV/peak/"
           "runtime; energy is a cost either way. CV and peak are on the "
@@ -161,7 +170,7 @@ def write_md(rows, out):
           "ballast is real time and energy the mitigation costs.", "",
           "Ranked by CV reduction — the flatness a smoother exists to deliver. "
           "The ± is run-to-run spread; where it rivals the mean (runtime, "
-          "energy), a single collection cannot be trusted, which is why three "
+          "energy), a single collection cannot be trusted, which is why four "
           "were taken. Per-cell numbers: `matrix.csv` (run × workload × "
           "mitigation).", ""]
     open(out, "w").write("\n".join(L) + "\n")

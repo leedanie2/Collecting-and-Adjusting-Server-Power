@@ -25,8 +25,8 @@ pdu_poll.py              the PDU session/scrape library pdu_influx.py drives
 
 `sys_influx.py` is the upstream half of the story: the run-queue depth it
 records (`/proc/stat`'s `procs_running`) is the signal the detector work leans
-on, and it is the one field here that leads a power transient rather than
-trailing it.
+on. The precursor screen found lead structure in run-queue signals, but that
+structure did not yield reliable advance warning in the evaluated models.
 
 ## Poster measurement summary
 
