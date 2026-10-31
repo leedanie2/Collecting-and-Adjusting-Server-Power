@@ -6,6 +6,4 @@ Work done during the 2026 Future Computing Summer Internship at the National Sec
 
 Daniel Lee (Grinnell College), Emily Doyle (Embry-Riddle), Alexander Johnson
 (Georgia Tech). The AI-style workload, stepped-load generator, and composite ramp
-were contributed by collaborators. Done during the 2026 Future Computing Summer
-Internship at the National Security Agency; AI tools assisted testing and
-implementation. MIT — see [LICENSE](LICENSE).
+were contributed by collaborators. MIT — see [LICENSE](LICENSE).
