@@ -10,3 +10,4 @@ were contributed by collaborators. MIT — see [LICENSE](LICENSE).
 
 ## Paper
 D. Lee, "Collect & Adjust Server-Level Power Consumption," submitted to the 2027 IEEE PES General Meeting, Nov. 2026.
+./Collecting_Server_Power_IEEE.pdf
